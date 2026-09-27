@@ -1,0 +1,10 @@
+{
+  "id": "reference-buoys",
+  "name": "引用浮标 · Reference Buoys",
+  "version": "0.1.2",
+  "minAppVersion": "1.8.0",
+  "description": "引用公式和图表，悬浮预览、固定对照，并通过多个临时浮标返回阅读位置。",
+  "author": "Changeuu",
+  "isDesktopOnly": true,
+  "authorUrl": "https://github.com/Changeuu"
+}

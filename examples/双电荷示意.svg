@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="340" viewBox="0 0 760 340">
+  <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 8 4 0 8Z" fill="#75858e"/></marker></defs>
+  <rect width="760" height="340" rx="20" fill="#f4f6f5"/>
+  <path d="M95 249H680M380 288V42" fill="none" stroke="#c5cecc" stroke-width="1.5"/>
+  <path d="M210 249L487 88M550 249L487 88" stroke="#75858e" stroke-width="2" stroke-dasharray="7 6" marker-end="url(#arrow)"/>
+  <circle cx="210" cy="249" r="25" fill="#dc765e"/><path d="M199 249H221M210 238V260" stroke="white" stroke-width="3"/>
+  <circle cx="550" cy="249" r="25" fill="#588c9e"/><path d="M539 249H561" stroke="white" stroke-width="3"/>
+  <circle cx="487" cy="88" r="7" fill="#304c50"/>
+  <g font-family="Georgia,serif" fill="#304c50" font-size="23"><text x="502" y="82">P</text><text x="191" y="303">+q</text><text x="532" y="303">−q</text><text x="323" y="150">r₁</text><text x="535" y="163">r₂</text><text x="686" y="255">x</text><text x="390" y="48">y</text></g>
+  <text x="35" y="40" font-family="sans-serif" font-size="13" letter-spacing="2" fill="#7c8c89">TWO CHARGES · FIELD SUPERPOSITION</text>
+</svg>
