@@ -1,7 +1,7 @@
 import { Compartment, EditorSelection, EditorState } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { history, undo, redo } from '@codemirror/commands';
-import { MarkdownView, TFile, editorInfoField, editorLivePreviewField } from './obsidian-stub';
+import { MarkdownView, Platform, TFile, editorInfoField, editorLivePreviewField } from './obsidian-stub';
 import ReferenceBuoysPlugin from '../../src/main';
 import { ReferenceSuggest } from '../../src/suggest';
 import { renderConversionSettings } from '../../src/ui/conversion-settings';
@@ -9,6 +9,7 @@ import { renderConversionSettings } from '../../src/ui/conversion-settings';
 async function boot() {
   await window.MathJax.startup.promise;
   (window as any).notices = [];
+  document.body.classList.toggle('is-mobile', Platform.isMobile);
   const source = await (await fetch('/examples/引用浮标体验.md')).text();
   const file = new TFile('引用浮标体验.md');
   const view = new MarkdownView(); view.file = file; view.contentEl = document.querySelector('#editor')!;
@@ -30,7 +31,7 @@ async function boot() {
     keymap.of([{ key: 'Ctrl-Alt-r', run: () => { plugin.converter.convertEditor(view.editor); return true; } },
       { key: 'Mod-z', run: undo, shift: redo }, { key: 'Mod-y', run: redo }]),
     EditorView.lineWrapping,
-    EditorView.theme({ '&': { height: '100%' }, '.cm-scroller': { overflow: 'auto', fontFamily: 'inherit', fontSize: '16px', lineHeight: '1.85' }, '.cm-content': { padding: '28px 50px 300px' } })
+    EditorView.theme({ '&': { height: '100%' }, '.cm-scroller': { overflow: 'auto', fontFamily: 'inherit', fontSize: '16px', lineHeight: '1.85' }, '.cm-content': { padding: Platform.isMobile ? '20px 16px 160px' : '28px 50px 300px' } })
   ] }) });
   const offset = (pos: any) => cm.state.doc.line(pos.line + 1).from + pos.ch;
   const pos = (offset: number) => { const line = cm.state.doc.lineAt(offset); return { line: line.number - 1, ch: offset - line.from }; };

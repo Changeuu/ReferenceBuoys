@@ -33,11 +33,11 @@ git push
 2. 同步更新 `README.md`（英文）和 `README.zh-CN.md`（简体中文）中的版本与更新说明。
 3. 运行 `npm.cmd run check`、`npm.cmd run test:ui` 和 `npm.cmd run package`，在 Obsidian 中手动试用安装包。
 4. 提交并推送这些文件。
-5. 为该提交添加与版本号相同的标签，例如下一个版本是 0.1.3 时：
+5. 为该提交添加与版本号相同的标签，例如下一个版本是 0.1.4 时：
 
 ```powershell
-git tag 0.1.3
-git push origin 0.1.3
+git tag 0.1.4
+git push origin 0.1.4
 ```
 
 标签推送会触发 GitHub Actions 的 Release 流程。检查通过后，自动发布 ZIP、校验文件及 Obsidian 所需的 `main.js`、`manifest.json`、`styles.css`。

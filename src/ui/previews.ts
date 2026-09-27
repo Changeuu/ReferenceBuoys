@@ -26,6 +26,10 @@ interface Preview {
   pinButton: HTMLButtonElement;
   jumpButton: HTMLButtonElement;
   target?: Target;
+  mobile: boolean;
+  collapsed: boolean;
+  active: boolean;
+  restoreButton?: HTMLButtonElement;
 }
 
 export class PreviewManager {
@@ -36,9 +40,11 @@ export class PreviewManager {
   private pendingElement?: HTMLElement;
   private z = 1000;
   private disposed = false;
+  private openGeneration = 0;
   constructor(private host: ReferenceBuoysPlugin) {}
 
   queue(element: HTMLElement, ref: Reference, origin: ReferenceOrigin): void {
+    if (this.host.isMobile) return;
     this.cancelClose();
     if (this.transient?.key === ref.key && this.transient.path === origin.path) return;
     this.cancelOpen();
@@ -65,15 +71,28 @@ export class PreviewManager {
       this.closeTransient();
     }, 280);
   }
-  closeTransient(): void { this.cancelOpen(); this.cancelClose(); if (this.transient) this.close(this.transient); }
+  closeTransient(): void { this.openGeneration++; this.cancelOpen(); this.cancelClose(); if (this.transient) this.close(this.transient); }
+
+  hideForNavigation(): void {
+    if (this.transient?.mobile) this.minimize(this.transient);
+    else this.closeTransient();
+  }
 
   async open(element: HTMLElement, ref: Pick<Reference, 'key' | 'kind' | 'label'>, origin: ReferenceOrigin): Promise<void> {
+    const generation = ++this.openGeneration;
     const index = await this.host.getIndex(origin.path);
-    if (this.disposed || !element.isConnected || !index) return;
+    if (this.disposed || generation !== this.openGeneration || !element.isConnected || !index) return;
+    const mobile = this.host.isMobile;
+    if (mobile && this.transient?.key === ref.key && this.transient.path === origin.path) {
+      this.transient.origin = { ...origin };
+      this.restore(this.transient);
+      await this.render(this.transient);
+      return;
+    }
     const anchor = element.getBoundingClientRect();
     this.closeTransient();
     const doc = element.ownerDocument;
-    const el = doc.body.createDiv({ cls: 'reflo-preview', attr: { role: 'dialog' } });
+    const el = doc.body.createDiv({ cls: `reflo-preview${mobile ? ' reflo-mobile-preview' : ''}`, attr: { role: 'dialog' } });
     el.style.width = `${this.host.settings.previewWidth}px`;
     el.style.zIndex = String(++this.z);
     const abort = new AbortController();
@@ -87,20 +106,32 @@ export class PreviewManager {
     const locationEl = titles.createDiv({ cls: 'reflo-preview-location', text: '本篇笔记' });
     const controls = header.createDiv({ cls: 'reflo-preview-controls' });
     let card: Preview;
-    const pinButton = iconButton(controls, 'pin', '固定此预览，留在旁边对照', () => this.pin(card));
-    const jumpButton = iconButton(controls, 'arrow-up-right', '跳到原文并留下返回浮标', () => {
-      if (card.target) { void this.host.jump(card.target, card.origin); if (!card.pinned) this.close(card); }
-    });
+    const pinButton = iconButton(controls, mobile ? 'chevron-down' : 'pin', mobile ? '收起预览' : '固定此预览，留在旁边对照', () => mobile ? this.minimize(card) : this.pin(card));
+    const jump = () => {
+      if (card.target) {
+        if (mobile) this.minimize(card);
+        void this.host.jump(card.target, card.origin);
+        if (!mobile && !card.pinned) this.close(card);
+      }
+    };
+    const jumpButton = iconButton(controls, 'arrow-up-right', '跳到原文并留下返回浮标', jump);
     iconButton(controls, 'x', '关闭预览', () => this.close(card));
     const body = el.createDiv({ cls: 'reflo-preview-body markdown-rendered' });
     const context = el.createDiv({ cls: 'reflo-preview-context markdown-rendered' });
     const footer = el.createDiv({ cls: 'reflo-preview-footer' });
     const contextButton = footer.createEl('button', { text: this.host.settings.showContext ? '收起上下文' : '展开上下文', cls: 'reflo-text-button' });
+    if (mobile) {
+      jumpButton.className = 'reflo-mobile-jump';
+      jumpButton.textContent = '跳转';
+      footer.appendChild(jumpButton);
+      el.querySelectorAll('[title]').forEach(button => button.removeAttribute('title'));
+    }
     contextButton.setAttribute('aria-expanded', String(this.host.settings.showContext));
     const component = new Component(); component.load();
     card = { el, body, context, component, abort, path: origin.path, key: ref.key, origin: { ...origin },
       targetFrom: index.byKey.get(ref.key)?.[0]?.from ?? -1, pinned: false,
-      contextOpen: this.host.settings.showContext, revision: 0, contentSignature: '', nameEl, locationEl, pinButton, jumpButton };
+      contextOpen: this.host.settings.showContext, revision: 0, contentSignature: '', nameEl, locationEl, pinButton, jumpButton,
+      mobile, collapsed: false, active: true };
     this.cards.add(card); this.transient = card;
     contextButton.addEventListener('click', () => {
       card.contextOpen = !card.contextOpen;
@@ -110,23 +141,26 @@ export class PreviewManager {
       void this.render(card);
     }, { signal });
     el.addEventListener('pointerenter', () => this.cancelClose(), { signal });
-    el.addEventListener('pointerleave', () => { if (!card.pinned) this.scheduleClose(); }, { signal });
+    el.addEventListener('pointerleave', () => { if (!mobile && !card.pinned) this.scheduleClose(); }, { signal });
     el.addEventListener('focusin', () => this.cancelClose(), { signal });
     el.addEventListener('keydown', event => {
       if (event.key === 'Escape') {
         event.stopPropagation();
-        if (this.transient && this.transient !== card) this.closeTransient();
+        if (mobile) this.minimize(card);
+        else if (this.transient && this.transient !== card) this.closeTransient();
         else { this.close(card); element.focus(); }
       }
     }, { signal });
     el.addEventListener('pointerdown', () => { el.style.zIndex = String(++this.z); }, { signal });
-    this.enableDrag(card, header);
+    if (mobile) this.enableMobile(card, header);
+    else this.enableDrag(card, header);
     this.position(card, anchor);
     await this.render(card);
     if (this.cards.has(card) && !card.pinned) this.position(card, anchor);
   }
 
   private position(card: Preview, anchor: DOMRect): void {
+    if (card.mobile) { this.positionMobile(card); return; }
     const win = card.el.ownerDocument.defaultView!;
     const rect = card.el.getBoundingClientRect();
     const width = Math.min(rect.width, win.innerWidth - 24);
@@ -145,6 +179,73 @@ export class PreviewManager {
     }
     card.el.style.left = `${left}px`;
     card.el.style.top = `${clamp(top, 12, win.innerHeight - Math.min(rect.height, 180) - 12)}px`;
+  }
+
+  private minimize(card: Preview): void {
+    if (!card.mobile || !this.cards.has(card)) return;
+    this.openGeneration++;
+    this.cancelOpen(); this.cancelClose();
+    card.collapsed = true;
+    card.el.hidden = true;
+    if (card.restoreButton) card.restoreButton.hidden = !card.active;
+  }
+
+  private restore(card: Preview): void {
+    card.collapsed = false;
+    card.active = true;
+    card.el.hidden = false;
+    if (card.restoreButton) card.restoreButton.hidden = true;
+    this.positionMobile(card);
+  }
+
+  private positionMobile(card: Preview): void {
+    const win = card.el.ownerDocument.defaultView!, viewport = win.visualViewport;
+    const width = viewport?.width ?? win.innerWidth, height = viewport?.height ?? win.innerHeight;
+    const left = viewport?.offsetLeft ?? 0;
+    const bottom = Math.max(0, win.innerHeight - (viewport?.offsetTop ?? 0) - height) + 60;
+    card.el.style.left = `${left + 8}px`;
+    card.el.style.top = 'auto';
+    card.el.style.width = `${Math.max(0, width - 16)}px`;
+    card.el.style.maxWidth = `${Math.max(0, width - 16)}px`;
+    card.el.style.maxHeight = `${Math.max(80, Math.min(height * .62, height - 100))}px`;
+    for (const element of [card.el, card.restoreButton]) if (element) {
+      element.style.setProperty('--reflo-mobile-bottom', `${bottom}px`);
+    }
+    if (card.restoreButton) card.restoreButton.style.left = `${left + 10}px`;
+  }
+
+  private enableMobile(card: Preview, header: HTMLElement): void {
+    const doc = card.el.ownerDocument, win = doc.defaultView!, signal = card.abort.signal;
+    card.restoreButton = doc.body.createEl('button', {
+      cls: 'reflo-mobile-preview-tab', text: `${card.nameEl.textContent} ▴`,
+      attr: { type: 'button', 'aria-label': `恢复预览：${card.nameEl.textContent}`, 'aria-haspopup': 'dialog' }
+    });
+    card.restoreButton.hidden = true;
+    card.restoreButton.addEventListener('click', () => this.restore(card), { signal });
+    doc.addEventListener('pointerdown', event => {
+      if (!card.active || card.collapsed || !(event.target instanceof Node)) return;
+      if (card.el.contains(event.target) || card.restoreButton?.contains(event.target)) return;
+      if (event.target instanceof Element && event.target.closest('.reflo-reference')) return;
+      this.minimize(card);
+    }, { capture: true, signal });
+    const resize = () => this.positionMobile(card);
+    win.addEventListener('resize', resize, { signal });
+    win.visualViewport?.addEventListener('resize', resize, { signal });
+    win.visualViewport?.addEventListener('scroll', resize, { signal });
+    let gesture: { id: number; x: number; y: number } | undefined;
+    header.addEventListener('pointerdown', event => {
+      if (event.button !== 0 || (event.target as Element).closest('button')) return;
+      gesture = { id: event.pointerId, x: event.clientX, y: event.clientY };
+      header.setPointerCapture(event.pointerId);
+    }, { signal });
+    header.addEventListener('pointerup', event => {
+      if (gesture?.id !== event.pointerId) return;
+      const dy = event.clientY - gesture.y, dx = event.clientX - gesture.x;
+      gesture = undefined;
+      if (dy >= 40 && dy > Math.abs(dx)) this.minimize(card);
+    }, { signal });
+    header.addEventListener('pointercancel', () => { gesture = undefined; }, { signal });
+    header.addEventListener('lostpointercapture', () => { gesture = undefined; }, { signal });
   }
 
   private pin(card: Preview): void {
@@ -269,7 +370,15 @@ export class PreviewManager {
     }
   }
   refresh(path?: string): void { for (const card of this.cards) if (!path || card.path === path) void this.render(card); }
-  setActivePath(path?: string): void { for (const card of this.cards) card.el.hidden = card.path !== path; }
+  setActivePath(path?: string): void {
+    this.openGeneration++;
+    for (const card of this.cards) {
+      card.active = card.path === path;
+      if (card.mobile && !card.active) this.minimize(card);
+      card.el.hidden = !card.active || card.collapsed;
+      if (card.restoreButton) card.restoreButton.hidden = !card.active || !card.collapsed;
+    }
+  }
   rename(from: string, to: string): void { for (const card of this.cards) if (card.path === from) { card.path = to; card.origin.path = to; } }
   private fitPinned(card: Preview): void {
     const win = card.el.ownerDocument.defaultView!, rect = card.el.getBoundingClientRect();
@@ -279,6 +388,7 @@ export class PreviewManager {
   private close(card: Preview): void {
     if (!this.cards.delete(card)) return;
     card.revision++; card.abort.abort(); card.component.unload(); card.el.remove();
+    card.restoreButton?.remove();
     if (this.transient === card) this.transient = undefined;
   }
   destroy(): void {

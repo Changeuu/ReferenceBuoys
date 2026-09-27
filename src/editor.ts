@@ -89,5 +89,5 @@ export function editorExtensions(host: ReferenceBuoysPlugin): Extension[] {
     }
     destroy(): void { host.forgetEditor(this.view); }
   }, { decorations: value => value.decorations });
-  return [indexField, live, flashField, dragConversionExtension(host)];
+  return [indexField, live, flashField, ...(host.isMobile ? [] : [dragConversionExtension(host)])];
 }

@@ -4,11 +4,11 @@
 
 **Read math-heavy notes without losing your place.**
 
-Reference Buoys makes it easier to write and read reference-heavy notes in Obsidian. Use simple labels like `@{1.13a}` to reference formulas, figures, tables, and other content within the same note. Hover to preview, pin multiple previews for comparison, or jump to the source and return using stacked markers.
+Reference Buoys makes it easier to write and read reference-heavy notes in Obsidian. Use simple labels like `@{1.13a}` to reference formulas, figures, tables, and other content within the same note. On desktop, hover to preview and pin multiple previews for comparison. On Android, tap to open a compact preview that collapses into a small label. Jump to the source and return using stacked markers.
 
 Built for **Live Preview**, with manual numbering and support for sublabels such as `1.13a` and `1.13b`.
 
-**Version 0.1.2 · Early release · Windows desktop · Obsidian 1.8.0 or later**
+**Version 0.1.3 · Early release · Windows + Android (experimental) · Obsidian 1.8.0 or later**
 
 The plugin interface and bundled example notes currently use Simplified Chinese. This guide includes the Chinese names of commands and controls so you can find them.
 
@@ -128,7 +128,29 @@ See @add{A.1}.
 
 Keep the `>` on blank lines within the blockquote. One label covers the entire block; individual paragraphs do not need separate labels.
 
-## Reading and navigation
+## Android (experimental)
+
+Use the same ZIP and reference syntax on Android. Copy the `reference-buoys` folder into the Android vault's `.obsidian/plugins/` directory, then enable it in **Settings → Community plugins**.
+
+| Touch action | Result |
+| --- | --- |
+| Tap a reference | Open a single preview panel near the bottom of the screen |
+| Tap **跳转** (Jump) in the preview | Jump to the source, leave a return marker, and collapse the preview |
+| Tap the down arrow, swipe down on the title bar, or touch outside the panel | Collapse it into a small label at the bottom left |
+| Tap that label | Restore the same preview, including its scroll position and expanded context |
+| Tap × in the panel | Close the preview completely |
+| Tap a return marker | Return to that reading position and remove only that marker |
+| Long-press a return marker | Open its removal menu |
+
+Return markers show only a direction and a sequence number, such as `↑ 1` or `↓ 2`. Markers above your current reading position sit at the top right; those below it sit at the bottom right. Multiple markers remain available in scrollable stacks, without text excerpts.
+
+Opening another reference replaces the current mobile preview. The panel adjusts to screen rotation and viewport changes. Jumping and returning do not explicitly focus the editor.
+
+To convert an existing citation, select it and run **转换选中的引用** (Convert selected reference). You can add this command to Obsidian's mobile toolbar. Templates and undo work as on desktop.
+
+Android support has passed browser tests with touch input and phone-sized viewports. **Testing in Obsidian on a physical Android device is still needed.** See `手机端体验.md` in the ZIP's example folder for a short walkthrough.
+
+## Reading and navigation on desktop
 
 | Action | Result |
 | --- | --- |
@@ -158,7 +180,7 @@ Each return marker shows a short excerpt from where you left. An arrow indicates
 
 ### Convert an existing reference as you read
 
-In Live Preview or Source mode, hold **Alt**, drag to select one complete reference such as `Eq. (1.13a)`, and release the mouse while still holding Alt. The selection becomes `@{1.13a}`. Releasing Alt early, pressing Esc, or leaving the application cancels the conversion.
+On desktop, in Live Preview or Source mode, hold **Alt**, drag to select one complete reference such as `Eq. (1.13a)`, and release the mouse while still holding Alt. The selection becomes `@{1.13a}`. Releasing Alt early, pressing Esc, or leaving the application cancels the conversion.
 
 You can also select normally and run **转换选中的引用** (Convert selected reference) from the command palette or the right-click menu. Find this command under **Settings → Hotkeys** to assign your own shortcut or mouse macro. It has no default hotkey.
 
@@ -215,13 +237,13 @@ Assign shortcuts to these commands in Obsidian's hotkey settings. The plugin doe
 
 ## Settings
 
-Adjust the hover delay, preview width, whether context is expanded by default, autocomplete, return-marker placement, and conversion modifiers and template groups. Colors follow your Obsidian theme.
+Adjust whether context is expanded by default, autocomplete, and conversion template groups. Desktop settings also include the hover delay, preview width, return-marker placement, and conversion modifiers. Colors follow your Obsidian theme.
 
 ## Scope and testing
 
-The current release targets **Windows desktop, references within the same note, and Live Preview**. Cross-file references, automatic numbering, and mobile gestures are not supported.
+The current release targets **Windows desktop and Android (experimental), references within the same note, and Live Preview**. Cross-file references and automatic numbering are not supported. iOS has not been tested.
 
-Automated tests cover parsing, context extraction, position tracking, selected-reference conversion, CodeMirror widgets, and browser interactions. Earlier versions have been tried manually in Obsidian on Windows; the new features in 0.1.2 still need more feedback from actual use. Browser component tests use a simplified Obsidian API stub with real CodeMirror and MathJax, so they do not replace testing in Obsidian.
+Automated tests cover parsing, context extraction, position tracking, selected-reference conversion, CodeMirror widgets, and browser interactions. Earlier versions have been tried manually in Obsidian on Windows; Android support in 0.1.3 still needs on-device testing. Browser component tests use a simplified Obsidian API stub with real CodeMirror and MathJax, so they do not replace testing in Obsidian.
 
 Suggested checks when trying the plugin:
 
@@ -235,6 +257,14 @@ Suggested checks when trying the plugin:
 To [report an issue](https://github.com/Changeuu/ReferenceBuoys/issues), include your Obsidian version, theme, a minimal example note, and the steps that trigger the problem. Use sample content that you are comfortable sharing.
 
 ## Changelog
+
+### 0.1.3
+
+- Added experimental Android support with tap-to-preview and a compact bottom panel.
+- Collapse the panel into a label and restore its content and scroll position.
+- Show mobile return markers as small directional labels at the top or bottom right; long-press to remove one.
+- Keep each return marker until it is used or removed. Mobile navigation does not explicitly focus the editor.
+- Added touch tests for scrolling, long presses, stacked returns, and viewport changes.
 
 ### 0.1.2
 

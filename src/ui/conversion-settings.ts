@@ -14,12 +14,16 @@ export function renderConversionSettings(parent: HTMLElement, host: ReferenceBuo
   const draw = () => {
     root.empty();
     root.createEl('h3', { text: '选中转换' });
-    root.createEl('p', { cls: 'setting-item-description', text: '拖选一个完整引用，执行“转换选中的引用”。可在 Obsidian 的快捷键设置中绑定按键，也可以使用右键菜单。' });
-    const dragRow = root.createDiv({ cls: 'reflo-conversion-row' });
-    dragRow.createSpan({ text: '按住修饰键拖选' });
-    const drag = select(dragRow, '拖选转换修饰键', [['off', '关闭'], ['Alt', 'Alt（默认）'], ['Control', 'Ctrl']], host.settings.dragConversion);
-    drag.addEventListener('change', () => { host.settings.dragConversion = drag.value as DragModifier; save(); });
-    root.createEl('p', { cls: 'setting-item-description', text: '按住修饰键，左键拖选引用，松开鼠标即可转换。松开修饰键或按 Esc 可取消这次转换。Ctrl+Z 撤销。' });
+    root.createEl('p', { cls: 'setting-item-description', text: host.isMobile
+      ? '选中一个完整引用，执行“转换选中的引用”。可将此命令添加到 Obsidian 的移动端工具栏。'
+      : '拖选一个完整引用，执行“转换选中的引用”。可在 Obsidian 的快捷键设置中绑定按键，也可以使用右键菜单。' });
+    if (!host.isMobile) {
+      const dragRow = root.createDiv({ cls: 'reflo-conversion-row' });
+      dragRow.createSpan({ text: '按住修饰键拖选' });
+      const drag = select(dragRow, '拖选转换修饰键', [['off', '关闭'], ['Alt', 'Alt（默认）'], ['Control', 'Ctrl']], host.settings.dragConversion);
+      drag.addEventListener('change', () => { host.settings.dragConversion = drag.value as DragModifier; save(); });
+      root.createEl('p', { cls: 'setting-item-description', text: '按住修饰键，左键拖选引用，松开鼠标即可转换。松开修饰键或按 Esc 可取消这次转换。Ctrl+Z 撤销。' });
+    }
 
     const profiles = host.settings.conversionProfiles;
     const profile = profiles.find(p => p.id === host.settings.activeConversionProfile) ?? profiles[0];

@@ -1,4 +1,4 @@
-import { Plugin, MarkdownView, TFile, Notice, Menu, editorInfoField, type Editor, type MarkdownPostProcessorContext } from 'obsidian';
+import { Plugin, Platform, MarkdownView, TFile, Notice, Menu, editorInfoField, type Editor, type MarkdownPostProcessorContext } from 'obsidian';
 import { ChangeSet } from '@codemirror/state';
 import { EditorView, type ViewUpdate } from '@codemirror/view';
 import { indexDocument, contextExcerpt, parseReference, REFERENCE_PATTERN } from './core/parser';
@@ -13,6 +13,7 @@ import { SelectionConverter } from './conversion';
 import { loadProfiles } from './core/conversion';
 
 export default class ReferenceBuoysPlugin extends Plugin {
+  readonly isMobile = Platform.isMobile;
   settings: Settings = { ...DEFAULT_SETTINGS };
   readonly points = new Map<string, ReturnPoint[]>();
   previews!: PreviewManager;
@@ -49,7 +50,7 @@ export default class ReferenceBuoysPlugin extends Plugin {
     }));
     this.registerEvent(this.app.workspace.on('layout-change', () => this.refreshPanels()));
     this.registerEvent(this.app.workspace.on('active-leaf-change', () => {
-      this.previews.closeTransient();
+      if (!this.isMobile) this.previews.closeTransient();
       this.previews.setActivePath(this.app.workspace.getActiveFile()?.path);
       this.refreshPanels();
     }));
@@ -67,8 +68,9 @@ export default class ReferenceBuoysPlugin extends Plugin {
     this.registerEvent(this.app.vault.on('delete', file => {
       this.points.delete(file.path); this.cache.delete(file.path); this.anchorSources.delete(file.path); this.previews.refresh(file.path); this.refreshPanels();
     }));
-    this.registerDomEvent(document, 'keydown', event => { if (event.key === 'Escape') this.previews.closeTransient(); });
+    this.registerDomEvent(document, 'keydown', event => { if (event.key === 'Escape') this.previews.hideForNavigation(); });
     this.registerDomEvent(document, 'scroll', () => this.scheduleUI(), true);
+    this.registerDomEvent(window, 'resize', () => this.scheduleUI());
     this.addCommand({ id: 'insert-reference', name: '插入引用 @{}', editorCallback: editor => this.insertToken(editor, '@{}', 2) });
     this.addCommand({ id: 'insert-figure-label', name: '插入图片编号标记', editorCallback: editor => this.insertToken(editor, '@#fig{}', 6) });
     this.addCommand({ id: 'insert-table-label', name: '插入表格编号标记', editorCallback: editor => this.insertToken(editor, '@#tab{}', 6) });
@@ -190,14 +192,17 @@ export default class ReferenceBuoysPlugin extends Plugin {
 
   bindReference(el: HTMLElement, ref: Reference, path: string, cm?: EditorView): void {
     const origin = (): ReferenceOrigin => ({ path, from: ref.from, to: ref.to, cm });
-    el.addEventListener('pointerdown', event => { if (event.button === 0) event.preventDefault(); });
-    el.addEventListener('mouseenter', () => this.previews.queue(el, ref, origin()));
-    el.addEventListener('mouseleave', event => this.previews.leaveSource(event.relatedTarget));
-    el.addEventListener('focus', () => this.previews.queue(el, ref, origin()));
-    el.addEventListener('blur', event => this.previews.leaveSource(event.relatedTarget));
+    el.addEventListener('pointerdown', event => { if (event.button === 0 && event.pointerType !== 'touch') event.preventDefault(); });
+    if (!this.isMobile) {
+      el.addEventListener('mouseenter', () => this.previews.queue(el, ref, origin()));
+      el.addEventListener('mouseleave', event => this.previews.leaveSource(event.relatedTarget));
+      el.addEventListener('focus', () => this.previews.queue(el, ref, origin()));
+      el.addEventListener('blur', event => this.previews.leaveSource(event.relatedTarget));
+    }
     el.addEventListener('click', event => {
       event.preventDefault(); event.stopPropagation();
       if (event.shiftKey && cm) { this.editReference(cm, ref); return; }
+      if (this.isMobile) { void this.previews.open(el, ref, origin()); return; }
       void this.followReference(el, ref, origin());
     });
     el.addEventListener('contextmenu', event => {
@@ -270,7 +275,7 @@ export default class ReferenceBuoysPlugin extends Plugin {
       excerpt: contextExcerpt(index.source, safeFrom), heading: headingAt(index.source, safeFrom), lost: false
     };
     points.push(point); this.points.set(origin.path, points);
-    this.app.workspace.setActiveLeaf(view.leaf, { focus: true });
+    this.app.workspace.setActiveLeaf(view.leaf, { focus: !this.isMobile });
     this.jumpGeneration++;
     if (cm && view.getMode() === 'source') {
       // Keep the caret outside the math source so Live Preview continues rendering the formula.
@@ -294,8 +299,8 @@ export default class ReferenceBuoysPlugin extends Plugin {
       if (leaf.view instanceof MarkdownView) view = leaf.view;
     }
     if (!view) return;
-    this.previews.closeTransient();
-    this.app.workspace.setActiveLeaf(view.leaf, { focus: true });
+    this.previews.hideForNavigation();
+    this.app.workspace.setActiveLeaf(view.leaf, { focus: !this.isMobile });
     const cm = this.cmForView(view);
     const generation = ++this.jumpGeneration;
     if (cm && view.getMode() === 'source') {
@@ -310,7 +315,8 @@ export default class ReferenceBuoysPlugin extends Plugin {
       restore();
       window.setTimeout(restore, 80);
       window.setTimeout(restore, 180);
-      cm.focus(); this.clearFlashLater(cm);
+      if (!this.isMobile) cm.focus();
+      this.clearFlashLater(cm);
     } else {
       view.setEphemeralState({ line: view.editor.offsetToPos(point.from).line });
       const scroller = view.contentEl.querySelector('.markdown-preview-view');

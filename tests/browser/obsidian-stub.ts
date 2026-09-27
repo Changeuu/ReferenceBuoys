@@ -2,6 +2,7 @@
 import { StateField } from '@codemirror/state';
 import MarkdownIt from 'markdown-it';
 declare global { interface Window { MathJax: any; lab: any } }
+export const Platform = { isMobile: new URLSearchParams(location.search).has('mobile') };
 export const editorLivePreviewField = StateField.define<boolean>({ create: () => true, update: value => value });
 export const editorInfoField = StateField.define<any>({ create: () => (window as any).__info, update: value => value });
 export class Component {
@@ -38,14 +39,34 @@ export class Modal {
   close() { this.onClose(); this.modalEl.remove(); }
   onOpen() {} onClose() {}
 }
-export class Menu { addItem(fn: any) { fn({ setTitle() { return this; }, setIcon() { return this; }, onClick() { return this; } }); } showAtMouseEvent() {} }
+export class Menu {
+  private items: any[] = [];
+  addItem(fn: any) {
+    const item = { title: '', action: () => {}, setTitle(value: string) { this.title = value; return this; },
+      setIcon() { return this; }, onClick(value: () => void) { this.action = value; return this; } };
+    fn(item); this.items.push(item); return this;
+  }
+  showAtMouseEvent(event: MouseEvent) { return this.showAtPosition({ x: event.clientX, y: event.clientY }); }
+  showAtPosition(position: { x: number; y: number }) {
+    document.querySelectorAll('.test-menu').forEach(el => el.remove());
+    const menu = document.body.createDiv({ cls: 'test-menu', attr: { role: 'menu' } });
+    Object.assign(menu.style, { position: 'fixed', left: `${Math.min(position.x, innerWidth - 130)}px`,
+      top: `${Math.min(position.y, innerHeight - 60)}px`, zIndex: '9999', background: 'white', padding: '8px' });
+    for (const item of this.items) {
+      const button = menu.createEl('button', { text: item.title, attr: { role: 'menuitem' } });
+      button.addEventListener('click', () => { menu.remove(); item.action(); });
+    }
+    return this;
+  }
+}
 export function setIcon(el: HTMLElement, name: string) {
   const paths: Record<string, string> = {
     x: '<path d="m6 6 12 12M6 18 18 6"/>', pin: '<path d="m16 3 5 5-4 1-4 4v4l-3-3-6 6 6-6-3-3h4l4-4z"/>',
     'pin-off': '<path d="m16 3 5 5-4 1-4 4v4l-3-3-6 6M3 3l18 18"/>', sigma: '<path d="M19 4H5l8 8-8 8h14"/>',
     image: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="m3 17 6-6 4 4 3-3 5 5"/><circle cx="15" cy="8" r="1"/>',
     'table-2': '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 9v12"/>',
-    'arrow-up-right': '<path d="M7 17 17 7M7 7h10v10"/>'
+    'arrow-up-right': '<path d="M7 17 17 7M7 7h10v10"/>',
+    'chevron-down': '<path d="m6 9 6 6 6-6"/>'
   };
   el.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${paths[name] ?? '<circle cx="12" cy="12" r="8"/>'}</svg>`;
 }
