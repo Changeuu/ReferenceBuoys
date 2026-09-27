@@ -30,7 +30,7 @@ git push
 ## 发布新版本
 
 1. 更新 `manifest.json` 和 `package.json` 中的版本号，并同步 `package-lock.json` 和 `versions.json`。
-2. 更新 README 中的版本与更新说明。
+2. 同步更新 `README.md`（英文）和 `README.zh-CN.md`（简体中文）中的版本与更新说明。
 3. 运行 `npm.cmd run check`、`npm.cmd run test:ui` 和 `npm.cmd run package`，在 Obsidian 中手动试用安装包。
 4. 提交并推送这些文件。
 5. 为该提交添加与版本号相同的标签，例如下一个版本是 0.1.3 时：
@@ -46,4 +46,4 @@ git push origin 0.1.3
 
 ## 构建与安装
 
-首次获取源码后运行 `npm.cmd ci` 安装开发依赖，再运行构建命令。普通使用者只需下载 Releases 中的 ZIP，安装方法见 [README](README.md)。GitHub 的 “Source code (zip)” 是源码压缩包，不是可直接安装的插件包。
+首次获取源码后运行 `npm.cmd ci` 安装开发依赖，再运行构建命令。普通使用者只需下载 Releases 中的 ZIP，安装方法见 [中文说明](README.zh-CN.md)。GitHub 的 “Source code (zip)” 是源码压缩包，不是可直接安装的插件包。

@@ -1,35 +1,26 @@
-# 引用浮标 · Reference Buoys
+# Reference Buoys
 
-在 Obsidian 的实时预览中引用公式、图片、表格和其他内容：鼠标悬浮就地查看，固定窗口持续对照，点击跳转后通过多个临时浮标返回。
+**English** | [简体中文](README.zh-CN.md)
 
-**0.1.2 试用版 · Windows 桌面端 · Obsidian 1.8.0 或更新版本**
+**Read math-heavy notes without losing your place.**
 
-### 0.1.2 更新
+Reference Buoys makes it easier to write and read reference-heavy notes in Obsidian. Use simple labels like `@{1.13a}` to reference formulas, figures, tables, and other content within the same note. Hover to preview, pin multiple previews for comparison, or jump to the source and return using stacked markers.
 
-- 按住 **Alt**，左键拖选一个完整引用，松开鼠标后转换。
-- 也可普通拖选后执行「转换选中的引用」命令，绑定自己的快捷键或鼠标宏；右键菜单也有同名入口。
-- 提供常用模板和自定义 `{n}` 模板，支持按书保存模板组、切换当前组，并在设置中试配。
-- 转换只处理选中的一处引用，可用 Ctrl+Z 单独撤销。普通拖选保持原样。
+Built for **Live Preview**, with manual numbering and support for sublabels such as `1.13a` and `1.13b`.
 
-### 0.1.1 更新
+**Version 0.1.2 · Early release · Windows desktop · Obsidian 1.8.0 or later**
 
-- 预览标题移除装饰图标。
-- 正文引用移除重复的操作提示，预览底部也不再显示教学文字。
-- 展开上下文会显示前后各最多两个完整内容块，包括独立公式；公式内的空行会保留。
-- 图表采用英文输入语法 `fig` / `tab`，渲染时仍显示「图」「表」。旧版中文语法继续可用。
-- 新增通用附注 `@add{编号}` / `@#add{编号}`，可引用文字、引用块、代码块等内容。
-- 点击返回后自动移除该条浮标，其他浮标保持原样。
-- 返回面板改为单行摘要，保留方向箭头和独立关闭按钮；章节信息放在悬停提示中。
+The plugin interface and bundled example notes currently use Simplified Chinese. This guide includes the Chinese names of commands and controls so you can find them.
 
-## 安装
+## Installation
 
-从 [Releases](https://github.com/Changeuu/ReferenceBuoys/releases) 下载 `reference-buoys-版本号.zip`。不要下载 GitHub 自动提供的 “Source code” 压缩包。
+Download `reference-buoys-VERSION.zip` from [Releases](https://github.com/Changeuu/ReferenceBuoys/releases). GitHub's automatically generated “Source code” archives do not contain a ready-to-install plugin.
 
-1. 解压发布包，把里面的 **`reference-buoys` 文件夹**复制到笔记库的 `.obsidian/plugins/` 下。
-2. 最终应当能看到以下三个文件，中间不要多套一层同名文件夹：
+1. Extract the ZIP and copy its **`reference-buoys` folder** into your vault's `.obsidian/plugins/` directory.
+2. Check that the three plugin files are directly inside that folder:
 
    ```text
-   你的笔记库/
+   Your vault/
    └─ .obsidian/
       └─ plugins/
          └─ reference-buoys/
@@ -38,16 +29,27 @@
             └─ styles.css
    ```
 
-3. 在 Obsidian 的「设置 → 第三方插件」中启用 **引用浮标 · Reference Buoys**。如果列表还没刷新，重启一次 Obsidian。
-4. 将发布包里的「示例笔记」文件夹复制到你的笔记库，打开其中的 `引用浮标体验.md`，切到**实时预览**。
+3. In Obsidian, open **Settings → Community plugins** and enable **引用浮标 · Reference Buoys**. Restart Obsidian if the plugin does not appear yet.
+4. To try the examples, copy the ZIP's `示例笔记` folder into your vault, open `引用浮标体验.md`, and switch to **Live Preview**.
 
-安装包已经构建完成，不需要安装 Node.js，不需要运行任何脚本。尚未上架社区插件市场。
+The release is already built; you do not need Node.js or any build commands to install it. The plugin is not yet listed in Obsidian's community plugin directory.
 
-**从旧版升级：** 先禁用插件，将新版 `reference-buoys` 内的 `main.js`、`manifest.json`、`styles.css` 覆盖到原插件目录，再重新启用。原来的 `data.json` 设置文件可以保留。
+**Upgrading:** Disable the plugin, replace `main.js`, `manifest.json`, and `styles.css` in its folder, then enable it again. Keep your existing `data.json` to preserve settings.
 
-## 公式引用
+## Reference syntax
 
-直接使用你手动写下的编号：
+| Content | Label at the source | Reference in your text |
+| --- | --- | --- |
+| Formula | `\tag{1.13a}` inside display math | `@{1.13a}` |
+| Figure | `@#fig{1.3}` below the image | `@fig{1.3}` |
+| Table | `@#tab{1.3}` below the table | `@tab{1.3}` |
+| Other content | `@#add{A.1}` below the content block | `@add{A.1}` |
+
+Formula, figure, table, and general-content labels are independent: each type can use the same number.
+
+## Formula references
+
+Use the labels you assign yourself:
 
 ```markdown
 $$
@@ -58,179 +60,201 @@ $$
 E_k = \frac12 mv^2 \tag{1.13b}
 $$
 
-将 @{1.13a} 代入 @{1.13b}。
+Substitute @{1.13a} into @{1.13b}.
 ```
 
-正文显示为「将（式 1.13a）代入（式 1.13b）」。支持 `1.13a`、`1.13b`、`A.1` 等完整编号，保留大小写。
+References render as `（式 1.13a）` and `（式 1.13b）`, where `式` means “equation.” Labels such as `1.13a`, `1.13b`, and `A.1` are matched in full and are case-sensitive.
 
-- **编号始终由你管理。** 插件不会自动编号、改号或添加 `eq:xxxx`、块 ID 等额外标识。
-- 同一个公式块含多个 `\tag` 时，预览保留完整公式组并突出被引用的那一行。
-- 公式使用 Obsidian 自身的 MathJax 渲染；语法必须是 MathJax 支持的 LaTeX。
-- 手动修改编号后，对应引用也需要由你修改。未找到的引用会用虚线提示。
+- **You control the numbering.** The plugin does not number or renumber formulas, or require extra IDs such as `eq:xxxx`.
+- If a formula block contains multiple `\tag` commands, the preview shows the whole block and highlights the referenced row.
+- Formulas use Obsidian's MathJax renderer and must use LaTeX syntax supported by MathJax.
+- If you change a label, update its references too. Unresolved references have a dashed underline.
 
-## 图片和表格
+## Figures and tables
 
-**有 `#` 表示定义编号，没有 `#` 表示引用。** 图片、表格和公式的编号相互独立。
+**A `#` marks a label definition; without it, the token is a reference.**
 
-`fig` 是 figure 的缩写，`tab` 是 table 的缩写。正文中仍显示「（图 1.3）」「（表 1.3）」。
+`fig` is short for “figure,” and `tab` is short for “table.” Their rendered labels are `（图 1.3）` and `（表 1.3）`.
 
 ```markdown
-![[示意图.png]]
+![[diagram.png]]
 
-@#fig{1.3} 图片说明，可省略。
+@#fig{1.3} Optional figure caption.
 
-参见 @fig{1.3}。
+See @fig{1.3}.
 ```
 
-也支持标准 Markdown 图片 `![说明](assets/示意图.png)`。
+Standard Markdown images, such as `![Description](assets/diagram.png)`, also work.
 
 ```markdown
-| 物理量 | 单位 |
+| Quantity | Unit |
 | --- | --- |
-| 质量 | kg |
-| 速度 | m/s |
+| Mass | kg |
+| Speed | m/s |
 
-@#tab{1.3} 表格说明，可省略。
+@#tab{1.3} Optional table caption.
 
-将 @tab{1.3} 中的数据代入 @{1.13a}。
+Substitute the values from @tab{1.3} into @{1.13a}.
 ```
 
-**编号标记必须另起一行，紧跟完整图片或表格。** 中间可以空行，但不能插入其他正文。图片应单独占一段，表格采用标准 Markdown 表格。子标号如 `@fig{1.3b}` 同样支持。
+**Place the label on its own line immediately after the complete image or table.** Blank lines are allowed, but unrelated text must not appear between the content and its label. Images should occupy their own paragraph, and tables should use standard Markdown table syntax. Sublabels such as `@fig{1.3b}` also work.
 
-## 通用附注
+## Other content
 
-用 `add`（addons 的缩写）引用其他内容，渲染为「（附 1.3）」。它与公式、图、表的编号相互独立，也支持 `1.13a` 等子标号。
+Use `add` (short for “addons”) to reference other content. It renders as `（附 1.3）`, where `附` denotes supplementary content. These labels are independent of formula, figure, and table labels and support sublabels such as `1.13a`.
 
 ```markdown
-这里是需要反复查看的一段说明，可以含公式 $v \ll c$。
+This approximation applies when $v \ll c$.
 
-@#add{1.3} 适用条件
+@#add{1.3} Conditions of use
 
-使用这个结论之前，先看 @add{1.3}。
+Before applying the result, see @add{1.3}.
 ```
 
-标记放在内容下方的独立行，引用紧邻的一个完整内容块：文字段落、图片、表格、连续列表、引用块、围栏代码块或独立公式块。代码块和公式块内部的空行会保留。多段内容需要一起预览时，用引用块或 Callout 包起来：
+Place the label on its own line below the content. It refers to the immediately preceding complete block: a paragraph, image, table, contiguous list, blockquote, fenced code block, or display math block. Blank lines inside code and math blocks are preserved.
+
+To preview several paragraphs together, wrap them in a blockquote or Callout:
 
 ```markdown
-> [!note] 适用条件
-> 第一段说明。
+> [!note] Conditions of use
+> First paragraph.
 >
-> 第二段说明。
+> Second paragraph.
 
 @#add{A.1}
 
-参见 @add{A.1}。
+See @add{A.1}.
 ```
 
-空白引用行也要保留 `>`。仅放一个 `@#add{}` 标记就能引用整个引用块，无需给内部每段分别编号。
+Keep the `>` on blank lines within the blockquote. One label covers the entire block; individual paragraphs do not need separate labels.
 
-## 阅读时怎么用
+## Reading and navigation
 
-| 操作 | 效果 |
+| Action | Result |
 | --- | --- |
-| 鼠标停在引用上 | 约 320 毫秒后显示预览，无需按 Ctrl |
-| 鼠标移入预览窗 | 预览保持打开，可以滚动表格、查看图注 |
-| 点击图钉 | 固定窗口，允许多个预览共存 |
-| 拖动预览标题栏 | 固定并移动窗口 |
-| 拖动固定窗口右下角 | 调整大小 |
-| 点击「展开上下文」 | 查看目标前后的完整公式和说明段落 |
-| 点击正文引用，或预览窗的跳转按钮 | 跳到原文，并留下返回浮标 |
-| 点击浮标 | 恢复阅读视野和光标，并移除本条浮标；保留其他浮标 |
-| 点击浮标旁的 × | 只移除该浮标 |
-| 点击「返回」标题 | 折叠或展开浮标列表 |
-| Esc | 关闭当前临时预览；键盘焦点在固定窗内时也可以关闭该窗 |
+| Hover over a reference | Preview appears after about 320 ms; no Ctrl key needed |
+| Move the pointer into the preview | Keep it open to scroll through content or read captions |
+| Click the pin | Keep the preview open alongside other pinned previews |
+| Drag the preview's title bar | Pin and move the window |
+| Drag a pinned window's bottom-right corner | Resize it |
+| Click **展开上下文** (Expand context) | Show complete formulas and text blocks around the target |
+| Click a reference or the preview's jump button | Jump to the source and leave a return marker |
+| Click a return marker | Restore your reading position and cursor, then remove that marker |
+| Click × beside a marker | Dismiss that marker |
+| Click **返回** (Return) | Collapse or expand the marker list |
+| Press Esc | Close the temporary preview, or a pinned preview when keyboard focus is inside it |
 
-浮标用一行显示出发处的原文片段，箭头表示它在当前阅读位置的上方还是下方。悬浮浮标可以看到小节和更完整的文字。新浮标排在最上面，可任选一条返回。
+Each return marker shows a short excerpt from where you left. An arrow indicates whether that location is above or below your current position. Hover over a marker for its section and a longer excerpt. New markers appear at the top, and you can return to any of them.
 
-### 浮标与编辑
+### Editing with return markers
 
-- 在同一个实时预览编辑器中插入、删除文字，返回位置会随编辑事务一起移动。
-- 出发处原文被删除时，浮标明确标记失效，并允许返回附近位置。
-- 切换笔记后，浮标跟着对应笔记切换；同篇笔记在不同面板中共享本次阅读足迹。
-- **浮标和预览窗不写入磁盘。** 退出 Obsidian、禁用或重载插件后全部清空。设置项会保存。
-- 同篇出现重复编号时，预览会列出位置供选择，不会默认跳到第一处。
+- Inserting or deleting text in the same Live Preview editor moves return positions along with the edits.
+- If the original text is deleted, its marker is marked as unavailable and lets you return to a nearby position.
+- Each note has its own markers. Multiple panes showing the same note share that note's markers during the session.
+- **Markers and preview windows are temporary.** They are cleared when Obsidian exits or the plugin is disabled or reloaded. Settings are saved.
+- Duplicate labels produce a list of possible targets so you can choose the intended one.
 
-## 输入与修改
+## Writing and converting references
 
-### 把课本里的引用转换过来
+### Convert an existing reference as you read
 
-在实时预览或源码模式中，按住 **Alt**，左键拖选 `式（1.13a）` 这样的完整引用，保持 Alt 按下并松开鼠标，即可转换为 `@{1.13a}`。提前松开 Alt、按 Esc 或离开应用可取消本次转换。
+In Live Preview or Source mode, hold **Alt**, drag to select one complete reference such as `Eq. (1.13a)`, and release the mouse while still holding Alt. The selection becomes `@{1.13a}`. Releasing Alt early, pressing Esc, or leaving the application cancels the conversion.
 
-也可以先普通拖选，再执行「引用浮标：转换选中的引用」。在「设置 → 快捷键」中搜索该命令，绑定习惯的按键或鼠标宏。右键菜单中也可执行。插件不预占此命令的快捷键。
+You can also select normally and run **转换选中的引用** (Convert selected reference) from the command palette or the right-click menu. Find this command under **Settings → Hotkeys** to assign your own shortcut or mouse macro. It has no default hotkey.
 
-| 选中的原文 | 转换结果 |
+| Selected text | Result |
 | --- | --- |
-| `式1.13a`、`式(1.13a)`、`（式1.13a）` | `@{1.13a}` |
-| `Eq. (1.13a)`、`(1.13a)` | `@{1.13a}` |
-| `图1.3`、`Fig. 1.3` | `@fig{1.3}` |
-| `表1.3`、`Table 1.3` | `@tab{1.3}` |
+| `式1.13a`, `式(1.13a)`, `（式1.13a）` | `@{1.13a}` |
+| `Eq. (1.13a)`, `(1.13a)` | `@{1.13a}` |
+| `图1.3`, `Fig. 1.3` | `@fig{1.3}` |
+| `表1.3`, `Table 1.3` | `@tab{1.3}` |
 | `附A.1` | `@add{A.1}` |
 
-- **一次只选一个完整引用，包括它自己的括号。** 选中整句、多处引用、多行内容或多个选区时不会批量替换。
-- 一次转换对应一个独立撤销步骤，按 **Ctrl+Z** 恢复原文。
-- 代码、公式内容和已有标准引用保持原样。
-- 这里只转换引用文字；目标公式仍需要已有 `\tag{编号}`。图、表、附也需要相应的目标标记。
-- 在插件设置的「选中转换」里可关闭修饰键拖选，或将 Alt 改为 Ctrl。关闭后仍可使用命令和右键菜单。
+- **Select one complete reference, including its own brackets.** Whole sentences, multiple references, multiple lines, and multiple selections are not batch-converted.
+- Each conversion is a separate undo step. Press **Ctrl+Z** to restore the original text.
+- Code, math content, and existing plugin reference tokens are left unchanged.
+- Conversion changes only the reference text. The target formula still needs its `\tag{label}`; other targets need the corresponding label markers.
+- In **选中转换** (Selection conversion) settings, you can disable modifier-drag conversion or change Alt to Ctrl. The command and context menu remain available.
 
-#### 为一本书配置模板
+#### Configure templates for a book
 
-1. 打开「设置 → 引用浮标 → 选中转换」，新建模板组，并用书名命名。
-2. 点击「添加模板」，选择式、图、表或附，输入模板。例如 `方程[{n}]`，其中 `{n}` 表示编号。
-3. 在「试配一段引用」中粘贴原书的例子，例如 `方程［2.13b］`，确认显示 `→ @{2.13b}`。
-4. 回到笔记，用 Alt 拖选或快捷键转换。当前模板组会保存，在同一本书的其他笔记中也能继续使用；换书时手动切换模板组。
+1. Open the plugin's **选中转换** (Selection conversion) settings. Create a template group and name it after the book.
+2. Click **添加模板** (Add template), choose the content type, and enter a template such as `Equation [{n}]`. The `{n}` placeholder represents the label.
+3. Paste an example such as `Equation ［2.13b］` into **试配一段引用** (Test a reference) and check that it produces `@{2.13b}`.
+4. Return to your note and convert references with Alt-drag or your shortcut. The active group is saved and can be used across notes for the same book; switch groups manually when changing books.
 
-模板按普通文字填写，无需正则表达式。半角与全角圆括号、方括号可互相匹配，编号附近的空格也会兼容，编号保留大小写。每个模板只能含一个 `{n}`；仅此一本书需要特殊规则时，可以关闭该组的「包含常用预设」。出现不同转换结果时会让你选择，关闭选择窗即可保持原文。
+Templates are plain text, not regular expressions. Half-width and full-width round or square brackets are interchangeable, and spaces around the label are handled. Labels retain their case. Each template must contain exactly one `{n}`. Disable **包含常用预设** (Include common presets) if a group should use only its custom templates. If several matches give different results, a chooser appears; dismiss it to leave the text unchanged.
 
-安装包附有 `选中转换练习.md`，可用来尝试以上操作。
+The ZIP includes `选中转换练习.md` for practicing conversion.
 
-### 直接输入标准引用
+### Enter references directly
 
-鼠标宏推荐设置为：**输入 `@{}` → 左方向键**。随后填写编号即可。输入时会列出当前笔记里的引用候选，包括公式预览和所在小节。
+A useful mouse macro is: **type `@{}` → press Left Arrow**. Then enter the label. Autocomplete suggests references in the current note, with formula previews and section names.
 
-图片、表格和通用附注也可分别设置为 `@fig{}`、`@tab{}`、`@add{}` → 左方向键；候选会按类型筛选。编号标记用 `@#fig{}`、`@#tab{}`、`@#add{}`。
+For figures, tables, and other content, use `@fig{}`, `@tab{}`, or `@add{}` followed by Left Arrow. Suggestions are filtered by type. Label definitions use `@#fig{}`, `@#tab{}`, and `@#add{}`.
 
-修改已有引用有三种方式：
+To edit a rendered reference:
 
-- 用方向键把光标移进引用，恢复可编辑的源码。
-- 按住 Shift 点击引用。
-- 右键引用，选择「编辑引用」。
+- Move the cursor into it with the arrow keys to reveal its source.
+- Hold Shift and click it.
+- Right-click it and choose **编辑引用** (Edit reference).
 
-命令面板提供：
+Available commands:
 
-- 插入引用 `@{}`
-- 插入图片编号标记
-- 插入表格编号标记
-- 插入通用附注编号标记
-- 转换选中的引用
-- 返回上一个浮标
-- 清除此篇笔记的返回浮标
+| Command in Obsidian | Meaning |
+| --- | --- |
+| 插入引用 @{} | Insert a reference |
+| 插入图片编号标记 | Insert a figure label |
+| 插入表格编号标记 | Insert a table label |
+| 插入通用附注编号标记 | Insert a label for other content |
+| 转换选中的引用 | Convert the selected reference |
+| 返回上一个浮标 | Return to the latest marker |
+| 清除此篇笔记的返回浮标 | Clear this note's return markers |
 
-可以在 Obsidian 的快捷键设置中为这些命令绑定按键。插件不占用预设快捷键。
+Assign shortcuts to these commands in Obsidian's hotkey settings. The plugin does not reserve default hotkeys.
 
-## 设置
+## Settings
 
-可调整悬浮等待时间、预览宽度、是否默认展开上下文、输入补全、返回浮标位置，以及选中转换的修饰键和模板组。颜色跟随 Obsidian 主题。
+Adjust the hover delay, preview width, whether context is expanded by default, autocomplete, return-marker placement, and conversion modifiers and template groups. Colors follow your Obsidian theme.
 
-## 试用范围与验证
+## Scope and testing
 
-当前版本以 **Windows 桌面端、当前笔记、实时预览模式**为使用范围。没有跨文件引用、自动编号或手机手势。
+The current release targets **Windows desktop, references within the same note, and Live Preview**. Cross-file references, automatic numbering, and mobile gestures are not supported.
 
-解析、上下文提取、位置跟踪、选中转换、CodeMirror 引用组件和浏览器交互使用自动化测试验证。早期版本已在 Windows Obsidian 中手动试用；0.1.2 的新增功能仍需继续收集实际应用反馈。 浏览器组件测试使用简化的 Obsidian API 替身和真实 CodeMirror、MathJax，不能代替 Obsidian 实测。
+Automated tests cover parsing, context extraction, position tracking, selected-reference conversion, CodeMirror widgets, and browser interactions. Earlier versions have been tried manually in Obsidian on Windows; the new features in 0.1.2 still need more feedback from actual use. Browser component tests use a simplified Obsidian API stub with real CodeMirror and MathJax, so they do not replace testing in Obsidian.
 
-建议先依次尝试：
+Suggested checks when trying the plugin:
 
-1. 悬浮查看示例中的公式、图、表。
-2. 固定两个预览并拖动位置。
-3. 连续跳转两次，分别点两个浮标返回。
-4. 留下浮标后，在笔记顶部插入几行，再返回。
-5. 查看多子标号公式组，并尝试修改一个编号、制造重复编号。
-6. 重载插件，确认临时浮标已清空。
+1. Preview formulas, figures, and tables in the example note.
+2. Pin two previews and move them around.
+3. Make two consecutive jumps, then use each return marker.
+4. Leave a marker, insert text near the top of the note, and return.
+5. Try a formula block with multiple sublabels, change a label, and create a duplicate.
+6. Reload the plugin and check that temporary markers are cleared.
 
-如果遇到问题，请提供 Obsidian 版本、使用的主题、最小复现笔记，以及发生问题的操作。公式或图表内容可以换成不涉及隐私的示例。
+To [report an issue](https://github.com/Changeuu/ReferenceBuoys/issues), include your Obsidian version, theme, a minimal example note, and the steps that trigger the problem. Use sample content that you are comfortable sharing.
 
-## 开发
+## Changelog
 
-需要 Node.js 24；推荐使用 Windows 开发和验证。
+### 0.1.2
+
+- Hold **Alt**, drag-select one complete reference, and release the mouse to convert it.
+- Convert a normal selection using a command, custom hotkey, mouse macro, or the context menu.
+- Use common presets and custom `{n}` templates, with named groups for different books and a tester in settings.
+- Conversion affects only the selected reference and can be undone with one Ctrl+Z. Ordinary selection is unchanged.
+
+### 0.1.1
+
+- Removed decorative icons from preview titles and redundant usage hints from references and previews.
+- Expanded context shows up to two complete blocks on each side, including display math and its internal blank lines.
+- Added English `fig` / `tab` syntax; rendered labels remain Chinese, and the older Chinese syntax still works.
+- Added `@add{label}` / `@#add{label}` for paragraphs, blockquotes, code blocks, and other content.
+- Returning through a marker removes only that marker.
+- Simplified the return panel to single-line excerpts, direction arrows, and individual close buttons; section details appear on hover.
+
+## Development
+
+Use Node.js 24. Windows is the recommended development and testing environment.
 
 ```text
 npm ci
@@ -239,12 +263,16 @@ npm run test:ui
 npm run package
 ```
 
-`test:ui` 在独立无头 Edge 中测试组件，不操作已有浏览器或 Obsidian。需要本机安装 Microsoft Edge。开发测试依赖不会进入发布包。
+`test:ui` runs component tests in a separate headless Microsoft Edge instance. Install Edge before running it. It does not operate your existing browser windows or Obsidian. Development dependencies are excluded from the release package.
 
-源码结构：`src/core` 负责解析和位置跟踪，`src/editor.ts` 负责实时预览，`src/ui` 负责预览窗和返回浮标。
+Source layout: `src/core` handles parsing and position tracking, `src/editor.ts` handles Live Preview, and `src/ui` contains the preview windows and return markers.
 
-设计调研参考了 [Equation Citator](https://github.com/friedparrot/obsidian-equation-citator)、[In-File Navigation History](https://github.com/beaurancourt/obsidian-in-file-nav-history)、[Hover Editor](https://github.com/nothingislost/obsidian-hover-editor) 和 Obsidian 官方 API。当前实现为独立插件，不要求安装这些插件。
+See the [Git maintenance guide (Chinese)](https://github.com/Changeuu/ReferenceBuoys/blob/main/GIT_GUIDE.md) for repository and release steps. Keep both READMEs in sync when updating features or versions. Pushes to `main` run basic checks; pushing a tag that matches the version builds and publishes the installation package.
 
-仓库维护和发版步骤见 [Git 使用说明](https://github.com/Changeuu/ReferenceBuoys/blob/main/GIT_GUIDE.md)。推送到 `main` 会运行基础检查；推送与版本号一致的标签会自动构建并发布安装包。
+## Acknowledgments
 
-MIT License。
+Design research included [Equation Citator](https://github.com/friedparrot/obsidian-equation-citator), [In-File Navigation History](https://github.com/beaurancourt/obsidian-in-file-nav-history), [Hover Editor](https://github.com/nothingislost/obsidian-hover-editor), and the official Obsidian API. Reference Buoys is an independent plugin and does not require those plugins to be installed.
+
+## License
+
+[MIT](LICENSE) · Copyright © 2026 Changeuu.

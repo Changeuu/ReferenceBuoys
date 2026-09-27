@@ -11,7 +11,7 @@ const kit = path.join(dist, name);
 const plugin = path.join(kit, 'reference-buoys');
 await fs.mkdir(plugin, { recursive: true });
 for (const file of ['main.js', 'manifest.json', 'styles.css']) await fs.copyFile(path.join(root, file), path.join(plugin, file));
-for (const file of ['README.md', 'LICENSE']) await fs.copyFile(path.join(root, file), path.join(kit, file));
+for (const file of ['README.md', 'README.zh-CN.md', 'LICENSE']) await fs.copyFile(path.join(root, file), path.join(kit, file));
 await fs.cp(path.join(root, 'examples'), path.join(kit, '示例笔记'), { recursive: true });
 const zip = path.join(dist, `${name}.zip`);
 const entries = {};
