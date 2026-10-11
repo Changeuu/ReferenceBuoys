@@ -7,6 +7,7 @@ export interface Settings {
   hoverDelay: number;
   previewWidth: number;
   showContext: boolean;
+  bodyMathScroll: boolean;
   suggestions: boolean;
   buoySide: 'left' | 'right';
   dragConversion: DragModifier;
@@ -14,7 +15,7 @@ export interface Settings {
   conversionProfiles: ConversionProfile[];
 }
 export const DEFAULT_SETTINGS: Settings = {
-  hoverDelay: 320, previewWidth: 460, showContext: false, suggestions: true, buoySide: 'right',
+  hoverDelay: 320, previewWidth: 460, showContext: false, bodyMathScroll: true, suggestions: true, buoySide: 'right',
   dragConversion: 'Alt', activeConversionProfile: 'default', conversionProfiles: defaultProfiles()
 };
 export class ReferenceSettingsTab extends PluginSettingTab {
@@ -34,6 +35,8 @@ export class ReferenceSettingsTab extends PluginSettingTab {
     }
     new Setting(containerEl).setName('默认展开上下文').setDesc('显示附近的完整公式和说明段落。')
       .addToggle(toggle => toggle.setValue(this.plugin.settings.showContext).onChange(async value => { this.plugin.settings.showContext = value; await this.plugin.saveSettings(); }));
+    new Setting(containerEl).setName('正文长公式横向滚动').setDesc('独立公式超出当前笔记面板宽度时允许横向滚动，适用于分屏阅读。')
+      .addToggle(toggle => toggle.setValue(this.plugin.settings.bodyMathScroll).onChange(async value => { this.plugin.settings.bodyMathScroll = value; await this.plugin.saveSettings(); }));
     new Setting(containerEl).setName('输入时建议引用').setDesc('输入 @{、@fig{、@tab{ 或 @add{ 后列出引用候选。支持在鼠标宏插入的括号内补全。')
       .addToggle(toggle => toggle.setValue(this.plugin.settings.suggestions).onChange(async value => { this.plugin.settings.suggestions = value; await this.plugin.saveSettings(); }));
     if (!this.plugin.isMobile) new Setting(containerEl).setName('返回浮标位置')

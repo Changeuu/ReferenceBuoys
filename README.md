@@ -8,7 +8,7 @@ Reference Buoys makes it easier to write and read reference-heavy notes in Obsid
 
 Built for **Live Preview**, with manual numbering and support for sublabels such as `1.13a` and `1.13b`.
 
-**Version 0.1.3 · Early release · Windows + Android (experimental) · Obsidian 1.8.0 or later**
+**Version 0.1.4 · Early release · Windows + Android (experimental) · Obsidian 1.8.0 or later**
 
 The plugin interface and bundled example notes currently use Simplified Chinese. This guide includes the Chinese names of commands and controls so you can find them.
 
@@ -205,7 +205,23 @@ You can also select normally and run **转换选中的引用** (Convert selected
 3. Paste an example such as `Equation ［2.13b］` into **试配一段引用** (Test a reference) and check that it produces `@{2.13b}`.
 4. Return to your note and convert references with Alt-drag or your shortcut. The active group is saved and can be used across notes for the same book; switch groups manually when changing books.
 
-Templates are plain text, not regular expressions. Half-width and full-width round or square brackets are interchangeable, and spaces around the label are handled. Labels retain their case. Each template must contain exactly one `{n}`. Disable **包含常用预设** (Include common presets) if a group should use only its custom templates. If several matches give different results, a chooser appears; dismiss it to leave the text unchanged.
+Templates are plain text, not regular expressions. Half-width and full-width round or square brackets are interchangeable, and spaces around the label are handled. Labels retain their case. Disable **包含常用预设** (Include common presets) if a group should use only its custom templates. If several templates give different valid results, a chooser appears; dismiss it to leave the text unchanged.
+
+- `{n}` extracts a label. Use it more than once when the same label appears repeatedly; every occurrence must agree exactly.
+- `{*}` matches and ignores variable text, including empty text. Every template still needs at least one `{n}`. Put fixed text or brackets around `{n}` to make extraction unambiguous.
+- A mismatch or ambiguous extraction shows an explanation and leaves the selection unchanged. `1-1-4` and `1.1.4` are different labels.
+
+For example, this custom template converts a wiki-link reference:
+
+```text
+Original: 公式 [[#^eq-1-1-4|(1.1.4)]]
+Template: 公式 [[#^eq-{*}|({n})]]
+Result:   @{1.1.4}
+```
+
+If both parts use `1.1.4`, use `公式 [[#^eq-{n}|({n})]]` to check that they agree.
+
+To create a template from an example, expand **从示例生成模板** (Generate from example). Paste the original reference, enter its actual label, select the content type, then click **生成模板**. You can edit the suggestion and see the conversion result before clicking **添加到当前模板组** (Add to current group). A single example cannot reveal every variable part, so check the suggestion against a second reference. Generation runs locally and does not scan or change your note.
 
 The ZIP includes `选中转换练习.md` for practicing conversion.
 
@@ -239,11 +255,13 @@ Assign shortcuts to these commands in Obsidian's hotkey settings. The plugin doe
 
 Adjust whether context is expanded by default, autocomplete, and conversion template groups. Desktop settings also include the hover delay, preview width, return-marker placement, and conversion modifiers. Colors follow your Obsidian theme.
 
+**正文长公式横向滚动** (Horizontal scrolling for body formulas) is an independent switch, **enabled by default**. In Live Preview and Reading view, a display formula that exceeds its note pane's current width gets horizontal scrolling. Desktop formulas show a draggable scrollbar when they overflow, including after a split pane is narrowed. Formulas retain their font size. Inline formulas and plugin previews keep their existing behavior. Turning the switch off restores the original body-formula styling.
+
 ## Scope and testing
 
 The current release targets **Windows desktop and Android (experimental), references within the same note, and Live Preview**. Cross-file references and automatic numbering are not supported. iOS has not been tested.
 
-Automated tests cover parsing, context extraction, position tracking, selected-reference conversion, CodeMirror widgets, and browser interactions. Earlier versions have been tried manually in Obsidian on Windows; Android support in 0.1.3 still needs on-device testing. Browser component tests use a simplified Obsidian API stub with real CodeMirror and MathJax, so they do not replace testing in Obsidian.
+Automated tests cover parsing, context extraction, position tracking, selected-reference conversion, template generation, formula overflow, CodeMirror widgets, and browser interactions. Earlier versions have been tried manually in Obsidian on Windows. The new 0.1.4 features and Android support still need testing in Obsidian. Browser component tests use a simplified Obsidian API stub with real CodeMirror and MathJax, so they do not replace app testing.
 
 Suggested checks when trying the plugin:
 
@@ -257,6 +275,14 @@ Suggested checks when trying the plugin:
 To [report an issue](https://github.com/Changeuu/ReferenceBuoys/issues), include your Obsidian version, theme, a minimal example note, and the steps that trigger the problem. Use sample content that you are comfortable sharing.
 
 ## Changelog
+
+### 0.1.4
+
+- Allow repeated `{n}` placeholders with exact agreement checks, and `{*}` for ignored text.
+- Generate editable conversion templates from an example and its actual label, including wiki-link aliases.
+- Explain conflicting labels and ambiguous matches without changing the selection.
+- Add an independent, default-on switch for horizontal scrolling of note-body display formulas as panes resize.
+- Add regression tests and practice notes for the new conversion and scrolling behavior.
 
 ### 0.1.3
 

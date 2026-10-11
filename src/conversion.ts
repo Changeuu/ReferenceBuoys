@@ -3,7 +3,7 @@ import { EditorView } from '@codemirror/view';
 import { isolateHistory } from '@codemirror/commands';
 import type ReferenceBuoysPlugin from './main';
 import { indexField } from './editor';
-import { matchSelectedReference, type ConversionMatch } from './core/conversion';
+import { analyzeSelectedReference, type ConversionMatch } from './core/conversion';
 
 export class SelectionConverter {
   private modal?: Modal;
@@ -29,8 +29,8 @@ export class SelectionConverter {
     if (index.references.some(overlaps)) { new Notice('所选内容已包含标准引用。'); return; }
     const profile = this.host.settings.conversionProfiles.find(p => p.id === this.host.settings.activeConversionProfile)
       ?? this.host.settings.conversionProfiles[0];
-    const matches = matchSelectedReference(doc.sliceString(range.from, range.to), profile);
-    if (!matches.length) { new Notice('所选内容不匹配当前模板。可在“引用浮标 → 选中转换”中添加模板。'); return; }
+    const { matches, error } = analyzeSelectedReference(doc.sliceString(range.from, range.to), profile);
+    if (!matches.length) { new Notice(error ?? '所选内容不匹配当前模板。可在“引用浮标 → 选中转换”中添加模板。'); return; }
     const path = cm.state.field(editorInfoField, false)?.file?.path;
     const apply = (match: ConversionMatch) => {
       if (!cm.dom.isConnected || cm.state.readOnly || !cm.state.facet(EditorView.editable)

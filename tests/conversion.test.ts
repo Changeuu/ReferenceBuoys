@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { defaultProfiles, loadProfiles, matchSelectedReference, modifierHeld, templateError, type ConversionProfile } from '../src/core/conversion';
+import { analyzeSelectedReference, suggestTemplate, defaultProfiles, loadProfiles, matchSelectedReference, modifierHeld, templateError, type ConversionProfile } from '../src/core/conversion';
 
 const defaults = defaultProfiles()[0];
 const result = (text: string, profile = defaults) => matchSelectedReference(text, profile).map(m => m.replacement);
@@ -47,10 +47,59 @@ test('conflicting kinds remain explicit choices while duplicate matches are dedu
 });
 
 test('invalid templates and long selections fail safely', () => {
-  for (const text of ['', '式', '式{n}{n}', '式{x}', '式{n}\n', 'x'.repeat(201) + '{n}']) assert.ok(templateError(text), text);
+  for (const text of ['', '式', '式{*}', '式{x}', '式{n}{x}', '式{n}\n', 'x'.repeat(201) + '{n}']) assert.ok(templateError(text), text);
   assert.equal(templateError('公式({n})'), undefined);
   assert.deepEqual(result('式' + '1'.repeat(600)), []);
   assert.deepEqual(result('式1', { ...defaults, includePresets: false, templates: [{ pattern: '(.*){n}{n}', kind: 'equation' }] }), []);
+});
+
+const custom = (pattern: string): ConversionProfile => ({ id: 'book', name: '书', includePresets: false, templates: [{ pattern, kind: 'equation' }] });
+test('repeated label placeholders agree exactly, including manual sublabels and case', () => {
+  const profile = custom('公式 [[#^eq-{n}|({n})]]');
+  assert.equal(templateError(profile.templates[0].pattern), undefined);
+  for (const label of ['1.1.4', '1.13a', 'A.1', '1.1(a)']) {
+    assert.deepEqual(result(`公式 [[#^eq-${label}|(${label})]]`, profile), [`@{${label}}`]);
+  }
+  for (const anchor of ['1-1-4', '1.1.5', 'A.1']) {
+    const trial = analyzeSelectedReference(`公式 [[#^eq-${anchor}|(1.1.4)]]`, profile);
+    assert.deepEqual(trial.matches, []); assert.match(trial.error!, /不一致/);
+  }
+  assert.deepEqual(result('式A.1 = a.1', custom('式{n} = {n}')), []);
+  assert.deepEqual(result('式1.13a = 1.13a = 1.13a', custom('式{n} = {n} = {n}')), ['@{1.13a}']);
+});
+
+test('wildcards ignore encoded wiki anchors and preserve selection boundaries', () => {
+  const profile = custom('公式 [[#^eq-{*}|({n})]]');
+  assert.deepEqual(result(' 公式 [[#^eq-1-1-4|(1.1.4)]] ', profile), [' @{1.1.4} ']);
+  assert.deepEqual(result('公式 ［［#^eq-任意锚点|（1.13b）］］', profile), ['@{1.13b}']);
+  assert.deepEqual(result('公式 [[#^eq-|(1.1.4)]]', profile), ['@{1.1.4}']);
+  assert.deepEqual(result('前文公式 [[#^eq-1-1-4|(1.1.4)]]', profile), []);
+  assert.deepEqual(result('公式 [[#^eq-1-1-4|(1.1.4)]]，公式 [[#^eq-1-1-5|(1.1.5)]]', profile), []);
+  assert.deepEqual(result('公式 [[#^eq-1-1-4|\n(1.1.4)]]', profile), []);
+  assert.deepEqual(result('prefix(first ignored: 1.2)[1.13a]suffix', custom('{*}[{n}]{*}')), ['@{1.13a}']);
+});
+
+test('ambiguous wildcard splits are rejected and pathological templates stay bounded', () => {
+  const ambiguous = analyzeSelectedReference('式123', custom('式{*}{n}'));
+  assert.deepEqual(ambiguous.matches, []); assert.match(ambiguous.error!, /不同编号/);
+  const started = performance.now();
+  const pathological = analyzeSelectedReference('a'.repeat(490), custom('{*}a'.repeat(40) + '{n}z'));
+  assert.deepEqual(pathological.matches, []);
+  assert.ok(performance.now() - started < 1500, 'bounded matching should not block the editor');
+});
+
+test('sample-driven templates handle wiki aliases, repeated labels and all target kinds', () => {
+  assert.deepEqual(suggestTemplate('公式 [[#^eq-1-1-4|(1.1.4)]]', '1.1.4', 'equation'), { pattern: '公式 [[#^eq-{*}|({n})]]' });
+  assert.deepEqual(suggestTemplate('公式 [[#^eq-1.1.4|(1.1.4)]]', '1.1.4', 'equation'), { pattern: '公式 [[#^eq-{n}|({n})]]' });
+  assert.deepEqual(suggestTemplate('公式 [[#^random-anchor|(1.13a)]]', '1.13a', 'equation'), { pattern: '公式 [[#^{*}|({n})]]' });
+  assert.deepEqual(suggestTemplate('方程（1.13a）', '1.13a', 'equation'), { pattern: '方程（{n}）' });
+  assert.deepEqual(suggestTemplate('式1.1 = 1.1', '1.1', 'equation'), { pattern: '式{n} = {n}' });
+  for (const kind of ['figure', 'table', 'addon'] as const) {
+    assert.deepEqual(suggestTemplate('内容[A.1]', 'A.1', kind), { pattern: '内容[{n}]' });
+  }
+  for (const [sample, label] of [['式11.3', '1.3'], ['式1.13a', '1.13'], ['式1.3', '1.4'], ['式1.3\n式1.4', '1.3'], ['式{n}', '1.3'], ['式1.3', '']]) {
+    assert.ok(suggestTemplate(sample, label, 'equation').error, sample);
+  }
 });
 
 test('saved groups are validated and older installs receive independent defaults', () => {

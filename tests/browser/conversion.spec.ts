@@ -152,3 +152,42 @@ test('Alt drag inside an old selection selects afresh without moving the selecte
   await expect.poll(() => doc(page)).toBe(source.replace('式（1.13a）', '@{1.13a}'));
   await page.keyboard.press('Control+z'); expect(await doc(page)).toBe(source);
 });
+
+test('generate an editable wiki template, persist it, convert only the selection and undo', async ({ page }) => {
+  const sample = '公式 [[#^eq-1-1-4|(1.1.4)]]';
+  await prepare(page, `${sample}\n${sample}\n\n$$ E=mc^2 \\tag{1.1.4} $$`);
+  const before = await doc(page);
+  await page.evaluate(() => window.lab.showConversionSettings());
+  await page.getByText('从示例生成模板', { exact: true }).click();
+  await page.getByRole('textbox', { name: '原始引用示例', exact: true }).fill(sample);
+  await page.getByRole('textbox', { name: '实际编号', exact: true }).fill('1.1.4');
+  await page.getByRole('button', { name: '生成模板', exact: true }).click();
+  const draft = page.getByRole('textbox', { name: '生成的模板', exact: true });
+  await expect(draft).toHaveValue('公式 [[#^eq-{*}|({n})]]');
+  await expect(page.locator('.reflo-generator-result')).toHaveText('→ @{1.1.4}');
+  const accept = page.getByRole('button', { name: '添加到当前模板组', exact: true });
+  await draft.fill('公式 [[#^eq-{n}|({n})]]');
+  await expect(accept).toBeDisabled(); await expect(page.locator('.reflo-generator-result')).toContainText('不一致');
+  await draft.fill('公式 [[#^eq-{*}|({n})]]');
+  await page.locator('.test-modal').screenshot({ path: '.qa/template-generator.png', animations: 'disabled' });
+  await accept.click();
+  await expect(page.getByRole('textbox', { name: '模板 1', exact: true })).toHaveValue('公式 [[#^eq-{*}|({n})]]');
+  await expect(page.locator('output')).toHaveText('→ @{1.1.4}');
+  expect(await page.evaluate(async () => (await window.lab.reloadSettings()).conversionProfiles[0].templates[0].pattern)).toBe('公式 [[#^eq-{*}|({n})]]');
+  await page.locator('.test-modal').evaluate(el => el.remove());
+  await selectText(page, sample); await page.keyboard.press('Control+Alt+r');
+  expect(await doc(page)).toBe(before.replace(sample, '@{1.1.4}'));
+  await page.keyboard.press('Control+z'); expect(await doc(page)).toBe(before);
+});
+
+test('disagreeing repeated labels show an actionable error without changing the document', async ({ page }) => {
+  const sample = '公式 [[#^eq-1-1-4|(1.1.4)]]';
+  await prepare(page, sample);
+  await page.evaluate(() => window.lab.plugin.settings.conversionProfiles[0].templates.push({ pattern: '公式 [[#^eq-{n}|({n})]]', kind: 'equation' }));
+  await selectText(page, sample); await page.keyboard.press('Control+Alt+r');
+  expect(await doc(page)).toBe(sample);
+  expect(await page.evaluate(() => (window as any).notices.at(-1))).toContain('不一致');
+  await page.evaluate(() => window.lab.showConversionSettings());
+  await page.getByRole('textbox', { name: '试配引用', exact: true }).fill(sample);
+  await expect(page.locator('output')).toContainText('不一致');
+});

@@ -1,6 +1,6 @@
 import type ReferenceBuoysPlugin from '../main';
 import { kindName, type TargetKind } from '../core/model';
-import { matchSelectedReference, PRESET_TEMPLATES, templateError, type ConversionProfile, type DragModifier } from '../core/conversion';
+import { analyzeSelectedReference, suggestTemplate, PRESET_TEMPLATES, templateError, type ConversionProfile, type DragModifier } from '../core/conversion';
 
 export function renderConversionSettings(parent: HTMLElement, host: ReferenceBuoysPlugin): void {
   const root = parent.createDiv({ cls: 'reflo-conversion-settings' });
@@ -57,7 +57,7 @@ export function renderConversionSettings(parent: HTMLElement, host: ReferenceBuo
       details.createEl('p', { text: `${kindName[kind]}：${PRESET_TEMPLATES.filter(t => t.kind === kind).map(t => t.pattern).join('、')}` });
     }
 
-    root.createEl('p', { cls: 'setting-item-description', text: '自定义模板用 {n} 表示编号，例如 Eq. ({n})。括号兼容全角和半角；一次只匹配整个选区。模板组可以按书命名并反复使用。' });
+    root.createEl('p', { cls: 'setting-item-description', text: '{n} 提取编号，可出现多次，但编号必须一致。{*} 忽略变化内容。括号兼容全角和半角；一次只匹配整个选区。' });
     const rows = root.createDiv({ cls: 'reflo-conversion-templates' });
     let refreshSample = () => {};
     profile.templates.forEach((template, i) => {
@@ -84,13 +84,54 @@ export function renderConversionSettings(parent: HTMLElement, host: ReferenceBuo
       root.querySelector<HTMLInputElement>(`[aria-label="模板 ${profile.templates.length}"]`)?.focus();
     });
 
+    const generator = root.createEl('details', { cls: 'reflo-template-generator' });
+    generator.createEl('summary', { text: '从示例生成模板' });
+    generator.createEl('p', { cls: 'setting-item-description', text: '粘贴一处原文并填写实际编号，生成后可继续修改，确认试配结果再添加。' });
+    const example = generator.createEl('input', { type: 'text', attr: { 'aria-label': '原始引用示例', placeholder: '公式 [[#^eq-1-1-4|(1.1.4)]]' } });
+    const generatorRow = generator.createDiv({ cls: 'reflo-conversion-row' });
+    const label = generatorRow.createEl('input', { type: 'text', attr: { 'aria-label': '实际编号', placeholder: '实际编号，例如 1.1.4' } });
+    const generatedKind = select(generatorRow, '生成模板的类型', Object.entries(kindName), 'equation');
+    const generate = generatorRow.createEl('button', { text: '生成模板', attr: { type: 'button' } });
+    const draft = generator.createEl('input', { type: 'text', attr: { 'aria-label': '生成的模板', placeholder: '生成后可在这里修改' } });
+    const status = generator.createDiv({ cls: 'reflo-generator-result', attr: { role: 'status', 'aria-live': 'polite' } });
+    const accept = generator.createEl('button', { text: '添加到当前模板组', attr: { type: 'button' } });
+    accept.disabled = true;
+    const validateDraft = () => {
+      accept.disabled = true;
+      const invalid = templateError(draft.value);
+      if (invalid) { status.textContent = draft.value ? invalid : ''; return; }
+      const trial = analyzeSelectedReference(example.value, { id: '', name: '', includePresets: false,
+        templates: [{ pattern: draft.value, kind: generatedKind.value as TargetKind }] });
+      const match = trial.matches[0];
+      if (trial.matches.length !== 1 || match.label !== label.value.trim()) {
+        status.textContent = trial.error ?? '模板未提取出填写的实际编号，请检查示例和模板。'; return;
+      }
+      status.textContent = `→ ${match.replacement}`; accept.disabled = false;
+    };
+    generate.addEventListener('click', () => {
+      const suggestion = suggestTemplate(example.value, label.value, generatedKind.value as TargetKind);
+      draft.value = suggestion.pattern ?? '';
+      validateDraft();
+      if (suggestion.error) status.textContent = suggestion.error;
+    });
+    for (const input of [example, label, draft]) input.addEventListener('input', validateDraft);
+    generatedKind.addEventListener('change', validateDraft);
+    accept.addEventListener('click', () => {
+      validateDraft(); if (accept.disabled) return;
+      const pattern = draft.value.trim(), kind = generatedKind.value as TargetKind;
+      if (!profile.templates.some(t => t.pattern === pattern && t.kind === kind)) profile.templates.push({ pattern, kind });
+      save(); draw();
+      const sample = root.querySelector<HTMLInputElement>('[aria-label="试配引用"]');
+      if (sample) { sample.value = example.value; sample.dispatchEvent(new Event('input')); }
+    });
+
     const test = root.createDiv({ cls: 'reflo-conversion-test' });
     test.createEl('label', { text: '试配一段引用' });
     const sample = test.createEl('input', { type: 'text', value: '式（1.13a）', attr: { 'aria-label': '试配引用', placeholder: '粘贴原书中的引用文字' } });
     const output = test.createEl('output', { attr: { 'aria-live': 'polite' } });
     refreshSample = () => {
-      const matches = matchSelectedReference(sample.value, profile);
-      output.textContent = matches.length === 1 ? `→ ${matches[0].replacement}` : matches.length ? `有多个结果：${matches.map(m => m.replacement).join('、')}` : '未匹配；请检查模板或添加一个自定义模板。';
+      const { matches, error } = analyzeSelectedReference(sample.value, profile);
+      output.textContent = matches.length === 1 ? `→ ${matches[0].replacement}` : matches.length ? `有多个结果：${matches.map(m => m.replacement).join('、')}` : error ?? '未匹配；请检查模板或添加一个自定义模板。';
     };
     sample.addEventListener('input', refreshSample);
     presets.addEventListener('change', () => { profile.includePresets = presets.checked; refreshSample(); save(); });

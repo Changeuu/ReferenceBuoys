@@ -19,7 +19,8 @@ export class MarkdownView {
 export class Plugin extends Component {
   extensions: any[] = []; commands: any[] = []; processors: any[] = [];
   constructor(public app: any, public manifest: any) { super(); }
-  async loadData() { return null; } async saveData(data: any) { (window as any).savedData = data; }
+  async loadData() { return structuredClone((window as any).savedData ?? null); }
+  async saveData(data: any) { (window as any).savedData = structuredClone(data); }
   addSettingTab() {} registerEditorSuggest() {}
   registerEditorExtension(extension: any) { this.extensions.push(extension); }
   registerMarkdownPostProcessor(fn: any) { this.processors.push(fn); }
@@ -28,7 +29,38 @@ export class Plugin extends Component {
   addCommand(command: any) { this.commands.push(command); }
 }
 export class PluginSettingTab { containerEl: any; constructor(..._args: any[]) {} }
-export class Setting { constructor(..._args: any[]) {} }
+export class Setting {
+  row: HTMLElement; name: HTMLElement;
+  constructor(parent: HTMLElement) { this.row = parent.createDiv({ cls: 'setting-item' }); this.name = this.row.createSpan(); }
+  setName(value: string) { this.name.textContent = value; return this; }
+  setDesc(value: string) { this.row.createEl('p', { text: value, cls: 'setting-item-description' }); return this; }
+  addToggle(fn: any) {
+    const input = this.row.createEl('input', { type: 'checkbox', attr: { 'aria-label': this.name.textContent! } });
+    const api = { setValue(value: boolean) { input.checked = value; return api; },
+      onChange(callback: any) { input.addEventListener('change', () => callback(input.checked)); return api; } };
+    fn(api); return this;
+  }
+  addSlider(fn: any) {
+    const input = this.row.createEl('input', { type: 'range' });
+    const api = { setLimits(min: number, max: number, step: number) { input.min = String(min); input.max = String(max); input.step = String(step); return api; },
+      setValue(value: number) { input.value = String(value); return api; }, setDynamicTooltip() { return api; },
+      onChange(callback: any) { input.addEventListener('input', () => callback(Number(input.value))); return api; } };
+    fn(api); return this;
+  }
+  addDropdown(fn: any) {
+    const input = this.row.createEl('select');
+    const api = { addOptions(options: Record<string, string>) { for (const [value, text] of Object.entries(options)) input.createEl('option', { value, text }); return api; },
+      setValue(value: string) { input.value = value; return api; },
+      onChange(callback: any) { input.addEventListener('change', () => callback(input.value)); return api; } };
+    fn(api); return this;
+  }
+  addButton(fn: any) {
+    const input = this.row.createEl('button');
+    const api = { setButtonText(value: string) { input.textContent = value; return api; },
+      onClick(callback: any) { input.addEventListener('click', callback); return api; } };
+    fn(api); return this;
+  }
+}
 export class EditorSuggest<T> { limit = 0; context: any; constructor(..._args: any[]) {} close() {} }
 export class Notice { constructor(message: string) { (window as any).notices.push(message); } }
 export class Modal {

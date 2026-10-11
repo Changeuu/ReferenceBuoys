@@ -227,3 +227,41 @@
 }
 .reflo-mobile-buoy.is-lost { opacity: .65; }
 .reflo-mobile-buoy:focus-visible, .reflo-mobile-preview-tab:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: -2px; }
+
+.reflo-template-generator { margin: 16px 0; }
+.reflo-template-generator summary { cursor: pointer; }
+.reflo-template-generator > input { width: 100%; margin: 8px 0; }
+.reflo-generator-result { margin: 8px 0; overflow-wrap: anywhere; color: var(--text-muted); font-size: var(--font-ui-small); }
+
+/* Scope to note panes; preview windows keep their own overflow rules. */
+.reflo-body-math-scroll :is(.markdown-source-view, .markdown-preview-view) :is(.math-block, .cm-embed-block.math) {
+  min-width: 0;
+  max-width: 100%;
+}
+.reflo-body-math-scroll :is(.markdown-source-view, .markdown-preview-view) mjx-container[display="true"] {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  /* Tagged MathJax formulas set an inline min-width; keep that on the inner
+     table, but let the outer scroll viewport shrink with the note pane. */
+  min-width: 0 !important;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-block: 2px;
+  text-align: left;
+}
+/* Auto margins center short formulas and become zero when a formula overflows,
+   keeping its left edge reachable. MathJax's full-width layout retains the tag. */
+.reflo-body-math-scroll :is(.markdown-source-view, .markdown-preview-view) mjx-container[display="true"] > mjx-math {
+  display: block;
+  width: max-content;
+  margin-inline: auto !important;
+}
+.reflo-body-math-scroll :is(.markdown-source-view, .markdown-preview-view) mjx-container[display="true"] > mjx-math[width="full"] {
+  min-width: 100%;
+}
+.reflo-body-math-scroll :is(.markdown-source-view, .markdown-preview-view) mjx-container[display="true"][justify="left"] > mjx-math { margin-left: 0 !important; }
+.reflo-body-math-scroll :is(.markdown-source-view, .markdown-preview-view) mjx-container[display="true"][justify="right"] > mjx-math { margin-right: 0 !important; }
+body:not(.is-mobile) .reflo-body-math-scroll :is(.markdown-source-view, .markdown-preview-view) mjx-container[display="true"]::-webkit-scrollbar { height: 8px; }
+body:not(.is-mobile) .reflo-body-math-scroll :is(.markdown-source-view, .markdown-preview-view) mjx-container[display="true"]::-webkit-scrollbar-track { background: var(--background-secondary); border-radius: 4px; }
+body:not(.is-mobile) .reflo-body-math-scroll :is(.markdown-source-view, .markdown-preview-view) mjx-container[display="true"]::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb-bg, var(--text-faint)); border-radius: 4px; }

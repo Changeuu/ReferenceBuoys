@@ -33,6 +33,7 @@ export default class ReferenceBuoysPlugin extends Plugin {
     this.settings = { ...DEFAULT_SETTINGS, ...(saved?.settings ?? {}) };
     this.settings.hoverDelay = Math.max(100, Math.min(900, Number(this.settings.hoverDelay) || 320));
     this.settings.previewWidth = Math.max(320, Math.min(760, Number(this.settings.previewWidth) || 460));
+    this.settings.bodyMathScroll = this.settings.bodyMathScroll !== false;
     this.settings.conversionProfiles = loadProfiles(saved?.settings?.conversionProfiles);
     if (!this.settings.conversionProfiles.some(p => p.id === this.settings.activeConversionProfile)) {
       this.settings.activeConversionProfile = this.settings.conversionProfiles[0].id;
@@ -95,10 +96,10 @@ export default class ReferenceBuoysPlugin extends Plugin {
     if (this.uiTimer !== undefined) window.clearTimeout(this.uiTimer);
     this.previews?.destroy();
     this.converter?.destroy();
-    for (const panel of this.panels.values()) panel.destroy();
+    for (const [view, panel] of this.panels) { panel.destroy(); view.contentEl.classList.remove('reflo-body-math-scroll'); }
     this.panels.clear(); this.points.clear(); this.cache.clear(); this.anchorSources.clear(); this.editors.clear();
   }
-  async saveSettings(): Promise<void> { await this.saveData({ settings: this.settings }); }
+  async saveSettings(): Promise<void> { this.refreshPanels(); await this.saveData({ settings: this.settings }); }
 
   private insertToken(editor: Editor, text: string, cursorOffset: number): void {
     const cursor = editor.getCursor('from');
@@ -370,10 +371,13 @@ export default class ReferenceBuoysPlugin extends Plugin {
     for (const leaf of this.app.workspace.getLeavesOfType('markdown')) if (leaf.view instanceof MarkdownView) {
       const view = leaf.view;
       live.add(view);
+      view.contentEl.classList.toggle('reflo-body-math-scroll', this.settings.bodyMathScroll);
       if (!this.panels.has(view)) this.panels.set(view, new BuoyPanel(this, view));
       this.panels.get(view)!.render();
     }
-    for (const [view, panel] of this.panels) if (!live.has(view)) { panel.destroy(); this.panels.delete(view); }
+    for (const [view, panel] of this.panels) if (!live.has(view)) {
+      panel.destroy(); view.contentEl.classList.remove('reflo-body-math-scroll'); this.panels.delete(view);
+    }
   }
 
   private async postProcess(el: HTMLElement, ctx: MarkdownPostProcessorContext): Promise<void> {

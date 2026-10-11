@@ -1,10 +1,11 @@
 import { Compartment, EditorSelection, EditorState } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { history, undo, redo } from '@codemirror/commands';
-import { MarkdownView, Platform, TFile, editorInfoField, editorLivePreviewField } from './obsidian-stub';
+import { MarkdownView, Platform, TFile, editorInfoField, editorLivePreviewField, renderMath, finishRenderMath } from './obsidian-stub';
 import ReferenceBuoysPlugin from '../../src/main';
 import { ReferenceSuggest } from '../../src/suggest';
 import { renderConversionSettings } from '../../src/ui/conversion-settings';
+import { ReferenceSettingsTab } from '../../src/settings';
 
 async function boot() {
   await window.MathJax.startup.promise;
@@ -46,6 +47,15 @@ async function boot() {
   };
   const suggest = new ReferenceSuggest(plugin);
   window.lab = { plugin, cm, view, source, file, suggest, EditorView, EditorSelection,
+    renderMath, finishRenderMath,
+    reloadSettings: async () => {
+      const fresh = new ReferenceBuoysPlugin(app, { id: 'reference-buoys' } as any);
+      await fresh.onload(); const settings = fresh.settings; fresh.onunload(); fresh.unload(); return settings;
+    },
+    showSettings: () => {
+      const tab = new ReferenceSettingsTab(app, plugin);
+      tab.containerEl = document.body.createDiv({ cls: 'test-modal' }); tab.display();
+    },
     setReadOnly: (value: boolean) => cm.dispatch({ effects: readOnly.reconfigure(EditorState.readOnly.of(value)) }),
     undo: () => undo(cm), redo: () => redo(cm),
     showConversionSettings: () => {

@@ -39,41 +39,146 @@ export function loadProfiles(raw: unknown): ConversionProfile[] {
 export function templateError(pattern: string): string | undefined {
   if (!pattern.trim()) return '请输入模板，例如 式({n})。';
   if (pattern.length > 200 || /[\r\n]/.test(pattern)) return '模板需要在一行内，长度不超过 200 字符。';
-  if (pattern.split('{n}').length !== 2 || /[{}]/.test(pattern.replace('{n}', ''))) return '模板需要且只能包含一个 {n}。';
+  if (!pattern.includes('{n}')) return '模板至少需要一个 {n} 来提取编号。';
+  if (/[{}]/.test(pattern.replace(/\{(?:n|\*)\}/g, ''))) return '只支持 {n}（编号）和 {*}（忽略内容）占位符。';
 }
 
-const space = '[^\\S\\r\\n]*';
-const escapeRegex = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-function literalPattern(text: string): string {
-  const brackets: Record<string, string> = { '(': '[(（]', '（': '[(（]', ')': '[)）]', '）': '[)）]', '[': '[\\[［]', '［': '[\\[［]', ']': '[\\]］]', '］': '[\\]］]' };
-  let result = '';
-  for (const char of text) {
-    const part = /\s/.test(char) ? space : brackets[char] ? `${space}${brackets[char]}${space}` : escapeRegex(char);
-    result += part;
+const labelSyntax = /^[A-Za-z0-9]+(?:[.\-][A-Za-z0-9]+)*(?:\([A-Za-z0-9]+\))?$/;
+const validLabel = (text: string) => text.length <= 100 && labelSyntax.test(text);
+const brackets: Record<string, string> = { '（': '(', '）': ')', '［': '[', '］': ']' };
+const canonical = (char: string) => brackets[char] ?? char;
+type Token = { type: 'literal'; char: string } | { type: 'space' | 'label' | 'wildcard' };
+function tokenize(pattern: string): Token[] {
+  const tokens: Token[] = [];
+  const space = () => { if (tokens.at(-1)?.type !== 'space') tokens.push({ type: 'space' }); };
+  for (let i = 0; i < pattern.length; i++) {
+    const placeholder = pattern.slice(i, i + 3);
+    if (placeholder === '{n}' || placeholder === '{*}') {
+      space(); tokens.push({ type: placeholder === '{n}' ? 'label' : 'wildcard' }); space(); i += 2;
+    } else if (/\s/.test(pattern[i])) space();
+    else {
+      const char = canonical(pattern[i]);
+      if ('()[]'.includes(char)) space();
+      tokens.push({ type: 'literal', char });
+      if ('()[]'.includes(char)) space();
+    }
   }
-  // Consecutive optional-space groups would add needless regex backtracking.
-  return result.split(space).filter((part, i, all) => part || i === 0 || i === all.length - 1).join(space);
+  return tokens;
+}
+
+export interface ConversionAnalysis { matches: ConversionMatch[]; error?: string }
+
+/** A finite-state table avoids regex backtracking with repeated wildcards.
+ * Inspect every accepting path, so an ambiguous wildcard never silently picks a label. */
+function extractLabel(input: string, pattern: string): { label?: string; error?: string } {
+  const tokens = tokenize(pattern.trim()), length = input.length;
+  const table = Array.from({ length: tokens.length + 1 }, () => new Uint8Array(length + 1));
+  table[tokens.length][length] = 1;
+  const ends = Array.from({ length: length + 1 }, (_, start) => {
+    const result: number[] = [];
+    for (let end = start + 1; end <= Math.min(length, start + 100); end++) {
+      if (validLabel(input.slice(start, end))) result.push(end);
+    }
+    return result;
+  });
+  let operations = 0;
+  for (let t = tokens.length - 1; t >= 0; t--) {
+    const token = tokens[t], row = table[t], next = table[t + 1];
+    for (let p = length; p >= 0; p--) {
+      if (++operations > 500_000) return { error: '模板匹配过于复杂，请增加固定文字或减少占位符。' };
+      if (token.type === 'label') {
+        for (const end of ends[p]) {
+          if (++operations > 500_000) return { error: '模板匹配过于复杂，请增加固定文字或减少占位符。' };
+          if (next[end]) { row[p] = 1; break; }
+        }
+      } else if (token.type === 'literal') row[p] = Number(p < length && canonical(input[p]) === token.char && Boolean(next[p + 1]));
+      else row[p] = Number(Boolean(next[p]) || (p < length && Boolean(row[p + 1]) && (token.type === 'wildcard' || /\s/.test(input[p]))));
+    }
+  }
+  if (!table[0][0]) return {};
+  const labels = new Set<string>();
+  const seen = new Set<number>();
+  const pending: Array<[number, number]> = [[0, 0]];
+  while (pending.length) {
+    const [t, p] = pending.pop()!;
+    const key = t * (length + 1) + p;
+    if (seen.has(key) || !table[t][p] || t === tokens.length) continue;
+    seen.add(key);
+    const token = tokens[t];
+    if (token.type === 'label') {
+      for (const end of ends[p]) if (table[t + 1][end]) {
+        labels.add(input.slice(p, end));
+        if (labels.size > 1) {
+          const repeated = tokens.filter(t => t.type === 'label').length > 1;
+          return { error: repeated
+            ? `多个 {n} 提取到不一致或不明确的编号：${[...labels].join('、')}。不同写法可改用 {*} 忽略。`
+            : '占位符可以提取出不同编号，请在 {n} 周围增加固定文字或括号。' };
+        }
+        pending.push([t + 1, end]);
+      }
+    } else if (token.type === 'literal') pending.push([t + 1, p + 1]);
+    else {
+      pending.push([t + 1, p]);
+      if (p < length && (token.type === 'wildcard' || /\s/.test(input[p]))) pending.push([t, p + 1]);
+    }
+  }
+  return { label: [...labels][0] };
 }
 
 /** Anchored matching on one explicitly selected reference, never a document search. */
-export function matchSelectedReference(text: string, profile: ConversionProfile): ConversionMatch[] {
-  if (!text.trim() || text.length > 500 || /[\r\n]/.test(text)) return [];
+export function analyzeSelectedReference(text: string, profile: ConversionProfile): ConversionAnalysis {
+  if (!text.trim() || text.length > 500 || /[\r\n]/.test(text)) return { matches: [] };
+  if ((text.match(/\[\[|［［/g) ?? []).length > 1) return { matches: [], error: '请一次只选中一个完整引用。' };
   const leading = /^\s*/.exec(text)![0], trailing = /\s*$/.exec(text)![0];
   const input = text.trim();
   const templates = [...(profile.includePresets ? PRESET_TEMPLATES : []), ...profile.templates];
   const matches = new Map<string, ConversionMatch>();
+  let error: string | undefined;
   for (const template of templates) {
     if (templateError(template.pattern)) continue;
-    const [prefix, suffix] = template.pattern.trim().split('{n}');
-    // Labels retain their case and spelling; a prose sentence/list is not a label.
-    const labelPattern = '([A-Za-z0-9]+(?:[.\\-][A-Za-z0-9]+)*(?:\\([A-Za-z0-9]+\\))?)';
-    const regex = new RegExp(`^${literalPattern(prefix)}${space}${labelPattern}${space}${literalPattern(suffix)}$`);
-    const match = regex.exec(input);
-    if (!match || match[1].length > 100) continue;
-    const replacement = leading + referenceSource({ kind: template.kind, label: match[1] }) + trailing;
-    matches.set(replacement, { kind: template.kind, label: match[1], replacement, template: template.pattern });
+    const extracted = extractLabel(input, template.pattern);
+    error ??= extracted.error;
+    if (!extracted.label) continue;
+    const replacement = leading + referenceSource({ kind: template.kind, label: extracted.label }) + trailing;
+    matches.set(replacement, { kind: template.kind, label: extracted.label, replacement, template: template.pattern });
   }
-  return [...matches.values()];
+  return matches.size ? { matches: [...matches.values()] } : { matches: [], error };
+}
+
+export function matchSelectedReference(text: string, profile: ConversionProfile): ConversionMatch[] {
+  return analyzeSelectedReference(text, profile).matches;
+}
+
+/** Local suggestion from one example; callers keep it editable and require an explicit save. */
+export function suggestTemplate(sample: string, label: string, kind: TargetKind): { pattern?: string; error?: string } {
+  label = label.trim(); sample = sample.trim();
+  if (!validLabel(label)) return { error: '请输入完整编号，例如 1.1.4 或 1.13a。' };
+  if (!sample || sample.length > 500 || /[\r\n{}]/.test(sample)) return { error: '请粘贴一行原始引用，不包含占位符。' };
+  const part = (text: string) => {
+    let result = '';
+    for (let i = 0; i < text.length;) {
+      if (text.startsWith(label, i) && !/[A-Za-z0-9.\-]/.test(text[i - 1] ?? '')
+        && !/[A-Za-z0-9.\-]/.test(text[i + label.length] ?? '')) { result += '{n}'; i += label.length; }
+      else result += text[i++];
+    }
+    return result;
+  };
+  // Keep a wiki anchor's prefix but ignore its encoded number (1-1-4 vs 1.1.4).
+  const wiki = /^(.*?\[\[#\^)([^|\]\r\n]+)(\|)([^\]\r\n]+)(\]\].*)$/.exec([...sample].map(canonical).join(''));
+  let pattern: string;
+  if (wiki && part(wiki[4]).includes('{n}')) {
+    const anchor = wiki[2], alias = label.replaceAll('.', '-');
+    const suffix = anchor.endsWith(label) ? label : anchor.endsWith(alias) ? alias : undefined;
+    const prefix = suffix ? anchor.slice(0, -suffix.length) : '';
+    const anchorPattern = suffix && (!prefix || /[-_:]$/.test(prefix))
+      ? prefix + (suffix === label ? '{n}' : '{*}') : '{*}';
+    pattern = part(wiki[1]) + anchorPattern + wiki[3] + part(wiki[4]) + part(wiki[5]);
+  } else pattern = part(sample);
+  const error = templateError(pattern);
+  if (error) return { error: pattern.includes('{n}') ? error : '示例中没有找到这个完整编号，请检查实际编号。' };
+  const trial = analyzeSelectedReference(sample, { id: '', name: '', includePresets: false, templates: [{ pattern, kind }] });
+  if (trial.matches.length !== 1 || trial.matches[0].label !== label) return { error: trial.error ?? '无法确定模板，请手动填写。' };
+  return { pattern };
 }
 
 export function modifierHeld(event: Pick<MouseEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>, mode: DragModifier): boolean {
