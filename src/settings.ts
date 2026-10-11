@@ -37,7 +37,7 @@ export class ReferenceSettingsTab extends PluginSettingTab {
       .addToggle(toggle => toggle.setValue(this.plugin.settings.showContext).onChange(async value => { this.plugin.settings.showContext = value; await this.plugin.saveSettings(); }));
     new Setting(containerEl).setName('正文长公式横向滚动').setDesc('独立公式超出当前笔记面板宽度时允许横向滚动，适用于分屏阅读。')
       .addToggle(toggle => toggle.setValue(this.plugin.settings.bodyMathScroll).onChange(async value => { this.plugin.settings.bodyMathScroll = value; await this.plugin.saveSettings(); }));
-    new Setting(containerEl).setName('输入时建议引用').setDesc('输入 @{、@fig{、@tab{ 或 @add{ 后列出引用候选。支持在鼠标宏插入的括号内补全。')
+    new Setting(containerEl).setName('输入时建议引用').setDesc('输入 @{、@fig{、@tab{、@add{、@def{ 或 @thm{ 后列出引用候选。支持在鼠标宏插入的括号内补全。')
       .addToggle(toggle => toggle.setValue(this.plugin.settings.suggestions).onChange(async value => { this.plugin.settings.suggestions = value; await this.plugin.saveSettings(); }));
     if (!this.plugin.isMobile) new Setting(containerEl).setName('返回浮标位置')
       .addDropdown(dropdown => dropdown.addOptions({ right: '笔记右侧', left: '笔记左侧' }).setValue(this.plugin.settings.buoySide)
@@ -45,8 +45,10 @@ export class ReferenceSettingsTab extends PluginSettingTab {
     new Setting(containerEl).setName('清除本次阅读的浮标').setDesc('清除当前打开的所有返回浮标，不修改笔记。')
       .addButton(button => button.setButtonText('清除浮标').onClick(() => this.plugin.clearBuoys()));
     renderConversionSettings(containerEl, this.plugin);
+    containerEl.createEl('h3', { text: '定义与定理' });
+    containerEl.createEl('p', { cls: 'setting-item-description', text: '先选中完整内容，再执行“将选中内容设为引用目标”。检查类型、编号和预览后确认。桌面端可在 Obsidian 快捷键设置中为此命令绑定 Alt+D；如有冲突，请换用其他组合键。此操作不会由 Alt 拖选触发。' });
     const syntax = containerEl.createDiv({ cls: 'reflo-settings-syntax' });
     syntax.createEl('strong', { text: '输入约定' });
-    syntax.createEl('pre', { text: '公式引用  @{1.13a}  →  \\tag{1.13a}\n图片引用  @fig{1.3}  →  图片下方 @#fig{1.3}\n表格引用  @tab{1.3}  →  表格下方 @#tab{1.3}\n通用引用  @add{1.3}  →  内容块下方 @#add{1.3}' });
+    syntax.createEl('pre', { text: '公式引用  @{1.13a}  →  \\tag{1.13a}\n图片引用  @fig{1.3}  →  图片下方 @#fig{1.3}\n表格引用  @tab{1.3}  →  表格下方 @#tab{1.3}\n通用引用  @add{1.3}  →  内容块下方 @#add{1.3}\n定义引用  @def{1.1.1}  →  内容块下方 @#def{1.1.1}\n定理引用  @thm{1.1.1}  →  内容块下方 @#thm{1.1.1}' });
   }
 }

@@ -11,6 +11,7 @@ import { PreviewManager, mathText, type ReferenceOrigin } from './ui/previews';
 import { BuoyPanel } from './ui/buoys';
 import { SelectionConverter } from './conversion';
 import { loadProfiles } from './core/conversion';
+import { TargetMarker } from './target-marker';
 
 export default class ReferenceBuoysPlugin extends Plugin {
   readonly isMobile = Platform.isMobile;
@@ -18,6 +19,7 @@ export default class ReferenceBuoysPlugin extends Plugin {
   readonly points = new Map<string, ReturnPoint[]>();
   previews!: PreviewManager;
   converter!: SelectionConverter;
+  targetMarker!: TargetMarker;
   private cache = new Map<string, DocumentIndex>();
   private anchorSources = new Map<string, string>();
   private editors = new Map<EditorView, string>();
@@ -41,6 +43,7 @@ export default class ReferenceBuoysPlugin extends Plugin {
     if (!['off', 'Alt', 'Control'].includes(this.settings.dragConversion)) this.settings.dragConversion = 'Alt';
     this.previews = new PreviewManager(this);
     this.converter = new SelectionConverter(this);
+    this.targetMarker = new TargetMarker(this);
     this.addSettingTab(new ReferenceSettingsTab(this.app, this));
     this.registerEditorExtension(editorExtensions(this));
     this.registerEditorSuggest(new ReferenceSuggest(this));
@@ -48,6 +51,8 @@ export default class ReferenceBuoysPlugin extends Plugin {
     this.registerEvent(this.app.workspace.on('editor-menu', (menu, editor) => {
       if (editor.somethingSelected()) menu.addItem(item => item.setTitle('转换选中的引用').setIcon('replace')
         .onClick(() => this.converter.convertEditor(editor)));
+      if (editor.somethingSelected()) menu.addItem(item => item.setTitle('将选中内容设为引用目标').setIcon('bookmark-plus')
+        .onClick(() => this.targetMarker.markEditor(editor)));
     }));
     this.registerEvent(this.app.workspace.on('layout-change', () => this.refreshPanels()));
     this.registerEvent(this.app.workspace.on('active-leaf-change', () => {
@@ -76,6 +81,9 @@ export default class ReferenceBuoysPlugin extends Plugin {
     this.addCommand({ id: 'insert-figure-label', name: '插入图片编号标记', editorCallback: editor => this.insertToken(editor, '@#fig{}', 6) });
     this.addCommand({ id: 'insert-table-label', name: '插入表格编号标记', editorCallback: editor => this.insertToken(editor, '@#tab{}', 6) });
     this.addCommand({ id: 'insert-addon-label', name: '插入通用附注编号标记', editorCallback: editor => this.insertToken(editor, '@#add{}', 6) });
+    this.addCommand({ id: 'insert-definition-label', name: '插入定义编号标记', editorCallback: editor => this.insertToken(editor, '@#def{}', 6) });
+    this.addCommand({ id: 'insert-theorem-label', name: '插入定理编号标记', editorCallback: editor => this.insertToken(editor, '@#thm{}', 6) });
+    this.addCommand({ id: 'mark-selected-target', name: '将选中内容设为引用目标', editorCallback: editor => this.targetMarker.markEditor(editor) });
     this.addCommand({ id: 'convert-selected-reference', name: '转换选中的引用', editorCallback: editor => this.converter.convertEditor(editor) });
     this.addCommand({ id: 'return-to-buoy', name: '返回上一个浮标', checkCallback: checking => {
       const view = this.app.workspace.getActiveViewOfType(MarkdownView);
@@ -96,6 +104,7 @@ export default class ReferenceBuoysPlugin extends Plugin {
     if (this.uiTimer !== undefined) window.clearTimeout(this.uiTimer);
     this.previews?.destroy();
     this.converter?.destroy();
+    this.targetMarker?.destroy();
     for (const [view, panel] of this.panels) { panel.destroy(); view.contentEl.classList.remove('reflo-body-math-scroll'); }
     this.panels.clear(); this.points.clear(); this.cache.clear(); this.anchorSources.clear(); this.editors.clear();
   }

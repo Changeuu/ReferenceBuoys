@@ -1,4 +1,5 @@
-export type TargetKind = 'equation' | 'figure' | 'table' | 'addon';
+export type TargetKind = 'equation' | 'figure' | 'table' | 'addon' | 'definition' | 'theorem';
+export const typedKinds = { fig: 'figure', tab: 'table', add: 'addon', def: 'definition', thm: 'theorem' } as const;
 export interface Span { from: number; to: number }
 export interface Reference extends Span {
   kind: TargetKind;
@@ -28,7 +29,7 @@ export interface DocumentIndex {
   excluded: Span[];
 }
 export const kindName: Record<TargetKind, string> = {
-  equation: '式', figure: '图', table: '表', addon: '附'
+  equation: '式', figure: '图', table: '表', addon: '附', definition: '定义', theorem: '定理'
 };
 export function targetKey(kind: TargetKind, label: string): string {
   return `${kind}\u0000${label}`;
@@ -37,6 +38,6 @@ export function displayName(item: Pick<Reference, 'kind' | 'label'>): string {
   return `${kindName[item.kind]} ${item.label}`;
 }
 export function referenceSource(item: Pick<Reference, 'kind' | 'label'>): string {
-  const prefix = item.kind === 'equation' ? '' : item.kind === 'figure' ? 'fig' : item.kind === 'table' ? 'tab' : 'add';
+  const prefix = Object.entries(typedKinds).find(([, kind]) => kind === item.kind)?.[0] ?? '';
   return `@${prefix}{${item.label}}`;
 }

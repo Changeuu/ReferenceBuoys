@@ -1,5 +1,5 @@
 import { EditorSuggest, type Editor, type EditorPosition, type EditorSuggestContext, type EditorSuggestTriggerInfo, type TFile, renderMath, finishRenderMath, loadMathJax } from 'obsidian';
-import { displayName, referenceSource, type Target } from './core/model';
+import { displayName, referenceSource, type Target, typedKinds } from './core/model';
 import type ReferenceBuoysPlugin from './main';
 
 export class ReferenceSuggest extends EditorSuggest<Target> {
@@ -8,7 +8,7 @@ export class ReferenceSuggest extends EditorSuggest<Target> {
     if (!file || !this.host.settings.suggestions) return null;
     const line = editor.getLine(cursor.line);
     const before = line.slice(0, cursor.ch);
-    const match = /@(fig|tab|add)?\{([^{}]*)$/.exec(before);
+    const match = /@(fig|tab|add|def|thm)?\{([^{}]*)$/.exec(before);
     if (!match || match[2].startsWith('#')) return null;
     const from = before.length - match[0].length;
     if ((/\\+$/.exec(before.slice(0, from))?.[0].length ?? 0) % 2 === 1) return null;
@@ -22,8 +22,8 @@ export class ReferenceSuggest extends EditorSuggest<Target> {
   getSuggestions(context: EditorSuggestContext): Target[] {
     const index = this.host.getEditorIndex(context.editor, context.file.path);
     const query = context.query.trim().toLocaleLowerCase();
-    const prefix = context.editor.getLine(context.start.line).slice(context.start.ch).match(/^@(fig|tab|add)?\{/);
-    const kind = prefix?.[1] === 'fig' ? 'figure' : prefix?.[1] === 'tab' ? 'table' : prefix?.[1] === 'add' ? 'addon' : undefined;
+    const prefix = context.editor.getLine(context.start.line).slice(context.start.ch).match(/^@(fig|tab|add|def|thm)?\{/);
+    const kind = typedKinds[prefix?.[1] as keyof typeof typedKinds];
     return index.targets.filter(t => (!kind || t.kind === kind) && `${displayName(t).replace(' ', '')} ${t.heading} ${t.caption} ${t.math ?? ''}`.toLocaleLowerCase().includes(query)).slice(0, 12);
   }
   renderSuggestion(target: Target, el: HTMLElement): void {

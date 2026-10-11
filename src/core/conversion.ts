@@ -1,4 +1,4 @@
-import { referenceSource, type TargetKind } from './model';
+import { kindName, referenceSource, type TargetKind } from './model';
 
 export interface ConversionTemplate { pattern: string; kind: TargetKind }
 export interface ConversionProfile {
@@ -15,13 +15,15 @@ export const PRESET_TEMPLATES: ConversionTemplate[] = [
   ...['图{n}', '图({n})', '(图{n})', 'Fig. {n}', 'Fig. ({n})', 'Figure {n}']
     .map(pattern => ({ pattern, kind: 'figure' as const })),
   ...['表{n}', '表({n})', '(表{n})', 'Table {n}'].map(pattern => ({ pattern, kind: 'table' as const })),
-  ...['附{n}', '附({n})', '(附{n})'].map(pattern => ({ pattern, kind: 'addon' as const }))
+  ...['附{n}', '附({n})', '(附{n})'].map(pattern => ({ pattern, kind: 'addon' as const })),
+  ...['定义{n}', '定义({n})', '(定义{n})', 'Definition {n}', 'Def. {n}', 'Def. ({n})'].map(pattern => ({ pattern, kind: 'definition' as const })),
+  ...['定理{n}', '定理({n})', '(定理{n})', 'Theorem {n}', 'Thm. {n}', 'Thm. ({n})'].map(pattern => ({ pattern, kind: 'theorem' as const }))
 ];
 export function defaultProfiles(): ConversionProfile[] {
   return [{ id: 'default', name: '通用', includePresets: true, templates: [] }];
 }
 
-const isKind = (value: unknown): value is TargetKind => ['equation', 'figure', 'table', 'addon'].includes(String(value));
+const isKind = (value: unknown): value is TargetKind => typeof value === 'string' && Object.hasOwn(kindName, value);
 export function loadProfiles(raw: unknown): ConversionProfile[] {
   if (!Array.isArray(raw)) return defaultProfiles();
   const seen = new Set<string>();

@@ -229,6 +229,18 @@
 .reflo-mobile-buoy:focus-visible, .reflo-mobile-preview-tab:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: -2px; }
 
 .reflo-template-generator { margin: 16px 0; }
+.reflo-target-editor { display: grid; gap: 12px; }
+.reflo-target-editor h3 { margin: 0; font-size: var(--font-ui-medium); }
+.reflo-target-result { color: var(--text-muted); font-size: var(--font-ui-small); overflow-wrap: anywhere; }
+.reflo-target-result.is-error { color: var(--text-error); }
+.reflo-target-preview { max-height: 40vh; overflow: auto; padding: 12px 16px; border: 1px solid var(--background-modifier-border); border-radius: 8px; }
+.reflo-target-preview > div > :first-child { margin-top: 0; }
+.reflo-target-preview > div > :last-child { margin-bottom: 0; }
+.reflo-target-preview mjx-container { max-width: none; }
+.reflo-target-editor details summary { cursor: pointer; color: var(--text-muted); font-size: var(--font-ui-small); }
+.reflo-target-editor pre { max-height: 30vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--font-ui-small); }
+.reflo-target-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.is-mobile .reflo-target-actions button { min-height: 44px; }
 .reflo-template-generator summary { cursor: pointer; }
 .reflo-template-generator > input { width: 100%; margin: 8px 0; }
 .reflo-generator-result { margin: 8px 0; overflow-wrap: anywhere; color: var(--text-muted); font-size: var(--font-ui-small); }

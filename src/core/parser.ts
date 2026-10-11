@@ -1,7 +1,7 @@
-import { displayName, type DocumentIndex, type Reference, type Span, type Target, targetKey } from './model';
+import { displayName, type DocumentIndex, type Reference, type Span, type Target, targetKey, typedKinds } from './model';
 
 // Shared by the source parser, reading view and return-point summaries.
-export const REFERENCE_PATTERN = /@(?:#?(?:fig|tab|add))?\{#?[^{}\r\n]*\}/g;
+export const REFERENCE_PATTERN = /@(?:#?(?:fig|tab|add|def|thm))?\{#?[^{}\r\n]*\}/g;
 
 const escaped = (source: string, at: number): boolean => {
   let count = 0;
@@ -65,11 +65,11 @@ function literalRanges(source: string): Span[] {
 }
 
 export function parseReference(raw: string, from = 0): Reference | undefined {
-  const match = /^@(#?)(fig|tab|add)\{([^{}\r\n]+)\}$|^@\{(#?)([^{}\r\n]+)\}$/.exec(raw);
+  const match = /^@(#?)(fig|tab|add|def|thm)\{([^{}\r\n]+)\}$|^@\{(#?)([^{}\r\n]+)\}$/.exec(raw);
   if (!match) return;
   const typed = Boolean(match[2]);
   let label = (typed ? match[3] : match[5]).trim();
-  const kind = typed ? (match[2] === 'fig' ? 'figure' : match[2] === 'tab' ? 'table' : 'addon')
+  const kind = typed ? typedKinds[match[2] as keyof typeof typedKinds]
     : label.startsWith('图') ? 'figure' : label.startsWith('表') ? 'table' : 'equation';
   // Continue reading the first release's Chinese syntax in existing notes.
   if (!typed && kind !== 'equation') label = label.slice(1).trim();
@@ -149,6 +149,10 @@ export function indexDocument(source: string): DocumentIndex {
   const targets: Target[] = [];
   for (const block of mathBlocks) {
     const math = source.slice(block.contentFrom, block.contentTo);
+    const linePrefix = source.slice(lineStarts[lineAt(block.from)], block.from);
+    const quoteDepth = /^\s*(?:>\s*)+$/.test(linePrefix) ? (linePrefix.match(/>/g) ?? []).length : 0;
+    // Keep source offsets for tags, but remove Markdown quote prefixes for MathJax.
+    const renderedMath = quoteDepth ? math.replace(new RegExp(`^ {0,3}(?:> ?){${quoteDepth}}`, 'gm'), '') : math;
     const tags = tagsInMath(math);
     tags.forEach((tag, index) => {
       const tagFrom = block.contentFrom + tag.from;
@@ -156,7 +160,7 @@ export function indexDocument(source: string): DocumentIndex {
       const focus = { from: Math.max(block.contentFrom, lineStarts[line]), to: Math.min(block.contentTo, lineStarts[line + 1] === undefined ? source.length : lineStarts[line + 1] - 1) };
       targets.push({
         from: block.from, to: block.to, focus, line, kind: 'equation', label: tag.label,
-        key: targetKey('equation', tag.label), markdown: `$$\n${math.trim()}\n$$`, math,
+        key: targetKey('equation', tag.label), markdown: `$$\n${renderedMath.trim()}\n$$`, math: renderedMath,
         tagIndex: index, tagCount: tags.length, heading: headingAt(block.from), caption: ''
       });
     });
@@ -198,7 +202,7 @@ export function indexDocument(source: string): DocumentIndex {
       if (start === undefined) continue;
       blockStart = start;
     }
-    if (ref.kind !== 'addon' && excluded.some(r => overlaps(r, { from: blockStart, to: blockEnd }))) continue;
+    if ((ref.kind === 'figure' || ref.kind === 'table') && excluded.some(r => overlaps(r, { from: blockStart, to: blockEnd }))) continue;
     targets.push({ from: blockStart, to: lineEnd, focus: { from: blockStart, to: blockEnd },
       line: lineAt(blockStart), kind: ref.kind, label: ref.label, key: ref.key,
       markdown: source.slice(blockStart, blockEnd), heading: headingAt(blockStart), caption,
@@ -225,7 +229,7 @@ export function contextExcerpt(source: string, position: number): string {
     .replace(/(\*\*|__|~~|`+)(.*?)\1/g, '$2').slice(0, 90) || '此处的阅读位置';
 }
 
-/** The add marker labels one complete block directly above it. Multi-paragraph material
+/** Content markers label one complete block directly above them. Multi-paragraph material
  * can be grouped into a quote/callout, whose blank lines start with > as in Markdown. */
 function precedingContentStart(source: string, end: number, excluded: Span[]): number | undefined {
   if (end <= 0) return;
@@ -239,12 +243,12 @@ function precedingContentStart(source: string, end: number, excluded: Span[]): n
   });
   const lastBlock = atomic.find(span => span.from < end && span.to >= end);
   if (lastBlock && !quote) return lastBlock.from;
-  if (!lastLine || /^@(?:#(?:fig|tab|add)\{|\{#)/.test(lastLine)) return;
+  if (!lastLine || /^@(?:#(?:fig|tab|add|def|thm)\{|\{#)/.test(lastLine)) return;
   if (/^#{1,6}\s|^!\[/.test(lastLine)) return start;
   while (start > 0) {
     const previousStart = lineStart(start - 1);
     const previous = source.slice(previousStart, start).trim();
-    if (!previous || /^#{1,6}\s|^@(?:#(?:fig|tab|add)\{|\{#)/.test(previous)) break;
+    if (!previous || /^#{1,6}\s|^@(?:#(?:fig|tab|add|def|thm)\{|\{#)/.test(previous)) break;
     if (quote !== previous.startsWith('>')) break;
     if (!quote && atomic.some(span => span.from < start && span.to > previousStart)) break;
     start = previousStart;

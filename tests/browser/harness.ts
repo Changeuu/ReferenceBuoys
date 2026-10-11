@@ -30,6 +30,8 @@ async function boot() {
     ...plugin.extensions,
     history(),
     keymap.of([{ key: 'Ctrl-Alt-r', run: () => { plugin.converter.convertEditor(view.editor); return true; } },
+      // Test-only binding simulates a user assigning the new command in Obsidian.
+      { key: 'Alt-d', run: () => { plugin.commands.find((c: any) => c.id === 'mark-selected-target').editorCallback(view.editor); return true; } },
       { key: 'Mod-z', run: undo, shift: redo }, { key: 'Mod-y', run: redo }]),
     EditorView.lineWrapping,
     EditorView.theme({ '&': { height: '100%' }, '.cm-scroller': { overflow: 'auto', fontFamily: 'inherit', fontSize: '16px', lineHeight: '1.85' }, '.cm-content': { padding: Platform.isMobile ? '20px 16px 160px' : '28px 50px 300px' } })

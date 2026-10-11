@@ -8,7 +8,7 @@ Reference Buoys makes it easier to write and read reference-heavy notes in Obsid
 
 Built for **Live Preview**, with manual numbering and support for sublabels such as `1.13a` and `1.13b`.
 
-**Version 0.1.4 · Early release · Windows + Android (experimental) · Obsidian 1.8.0 or later**
+**Version 0.1.5 · Early release · Windows + Android (experimental) · Obsidian 1.8.0 or later**
 
 The plugin interface and bundled example notes currently use Simplified Chinese. This guide includes the Chinese names of commands and controls so you can find them.
 
@@ -44,6 +44,8 @@ The release is already built; you do not need Node.js or any build commands to i
 | Figure | `@#fig{1.3}` below the image | `@fig{1.3}` |
 | Table | `@#tab{1.3}` below the table | `@tab{1.3}` |
 | Other content | `@#add{A.1}` below the content block | `@add{A.1}` |
+| Definition | `@#def{1.1.1}` below the content block | `@def{1.1.1}` |
+| Theorem | `@#thm{1.1.1}` below the content block | `@thm{1.1.1}` |
 
 Formula, figure, table, and general-content labels are independent: each type can use the same number.
 
@@ -128,6 +130,48 @@ See @add{A.1}.
 
 Keep the `>` on blank lines within the blockquote. One label covers the entire block; individual paragraphs do not need separate labels.
 
+## Definitions and theorems
+
+Use `def` for definitions and `thm` for theorems. They render as “（定义 1.1.1）” and “（定理 1.1.1）”, with independent numbering and the same previews, jumps, and return markers as other references.
+
+For one paragraph, place the marker on a separate line below it:
+
+```markdown
+**定义 1.1.1** The complete definition goes here.
+
+@#def{1.1.1}
+
+Apply @def{1.1.1} to this case.
+```
+
+An ordinary line break continues the paragraph; a blank line separates paragraphs. For multiple paragraphs, formulas, or lists, enclose the complete content in one callout:
+
+```markdown
+> [!theorem] 定理 1.1.1
+> Under these assumptions,
+>
+> $$
+> a^2+b^2=c^2
+> $$
+>
+> the conclusion follows.
+
+@#thm{1.1.1}
+```
+
+### Mark a selection as a target
+
+1. Select the full definition or theorem, from the beginning of its first line to the end of its last line, including its Markdown formatting. In Live Preview, reveal the source or switch to Source mode if selecting rendered blocks is difficult.
+2. Run **将选中内容设为引用目标** (Mark selected content as a reference target) from the command palette or context menu.
+3. Check the type, suggested label, full preview, and expandable Markdown output. The label is suggested from an initial heading such as `**定义 1.1.1**` and stays editable.
+4. Click **确认标记** (Confirm). A single content block gets a marker; multiple blocks are grouped in a callout. Existing complete callouts are preserved. Press Ctrl+Z to undo the whole operation.
+
+**Suggested desktop shortcut: Alt+D.** In Obsidian → Settings → Hotkeys, find this command and assign it if it is free; choose another combination if Obsidian reports a conflict. The plugin does not reserve this shortcut. Plain Alt and Alt-drag do not invoke target creation. Mobile users can run the same command from their toolbar.
+
+The command does not infer where a definition ends or scan the whole note: your selection sets its boundaries. Partial lines, incomplete formula/code blocks, already marked targets, and duplicate labels of the same type are rejected. Cancel leaves the note unchanged; a confirmation cannot overwrite a note or selection changed while the dialog was open.
+
+Short citations such as `定义 1.1.4` and `定理 1.13a` still use **转换选中的引用**. Common Chinese and English presets are included, and custom templates and template generation support both types. The package includes `定义与定理体验.md`.
+
 ## Android (experimental)
 
 Use the same ZIP and reference syntax on Android. Copy the `reference-buoys` folder into the Android vault's `.obsidian/plugins/` directory, then enable it in **Settings → Community plugins**.
@@ -191,6 +235,8 @@ You can also select normally and run **转换选中的引用** (Convert selected
 | `图1.3`, `Fig. 1.3` | `@fig{1.3}` |
 | `表1.3`, `Table 1.3` | `@tab{1.3}` |
 | `附A.1` | `@add{A.1}` |
+| `定义 1.1.4`, `Definition 1.1.4` | `@def{1.1.4}` |
+| `定理 1.13a`, `Thm. (1.13a)` | `@thm{1.13a}` |
 
 - **Select one complete reference, including its own brackets.** Whole sentences, multiple references, multiple lines, and multiple selections are not batch-converted.
 - Each conversion is a separate undo step. Press **Ctrl+Z** to restore the original text.
@@ -245,6 +291,9 @@ Available commands:
 | 插入图片编号标记 | Insert a figure label |
 | 插入表格编号标记 | Insert a table label |
 | 插入通用附注编号标记 | Insert a label for other content |
+| 插入定义编号标记 | Insert a definition label |
+| 插入定理编号标记 | Insert a theorem label |
+| 将选中内容设为引用目标 | Preview and label selected definition/theorem content |
 | 转换选中的引用 | Convert the selected reference |
 | 返回上一个浮标 | Return to the latest marker |
 | 清除此篇笔记的返回浮标 | Clear this note's return markers |
@@ -261,7 +310,7 @@ Adjust whether context is expanded by default, autocomplete, and conversion temp
 
 The current release targets **Windows desktop and Android (experimental), references within the same note, and Live Preview**. Cross-file references and automatic numbering are not supported. iOS has not been tested.
 
-Automated tests cover parsing, context extraction, position tracking, selected-reference conversion, template generation, formula overflow, CodeMirror widgets, and browser interactions. Earlier versions have been tried manually in Obsidian on Windows. The new 0.1.4 features and Android support still need testing in Obsidian. Browser component tests use a simplified Obsidian API stub with real CodeMirror and MathJax, so they do not replace app testing.
+Automated tests cover parsing, context extraction, position tracking, selected-reference conversion, template generation, definition/theorem target creation, formula overflow, CodeMirror widgets, and browser interactions. Earlier versions have been tried manually in Obsidian on Windows. The new 0.1.5 features and Android support still need testing in Obsidian. Browser component tests use a simplified Obsidian API stub with real CodeMirror and MathJax, so they do not replace app testing.
 
 Suggested checks when trying the plugin:
 
@@ -275,6 +324,14 @@ Suggested checks when trying the plugin:
 To [report an issue](https://github.com/Changeuu/ReferenceBuoys/issues), include your Obsidian version, theme, a minimal example note, and the steps that trigger the problem. Use sample content that you are comfortable sharing.
 
 ## Changelog
+
+### 0.1.5
+
+- Added `@def{}` / `@#def{}` and `@thm{}` / `@#thm{}` with previews, navigation, autocomplete, and conversion templates.
+- Added a command to preview and label selected definition or theorem content, with editable numbering and explicit confirmation.
+- Group multiple selected blocks in a callout and preserve one-step undo; reject partial blocks, duplicate labels, and stale confirmations.
+- Keep target creation separate from Alt-drag conversion; shortcuts remain user-assigned.
+- Preserve formula references inside callouts by removing quote prefixes before MathJax rendering.
 
 ### 0.1.4
 

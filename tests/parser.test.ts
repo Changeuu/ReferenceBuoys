@@ -146,3 +146,20 @@ test('add keeps adjacent display blocks separate from a following paragraph', ()
 test('buoy summaries show readable text without markup or input tokens', () => {
   assert.equal(contextExcerpt('**先试试：** 查看 @fig{1.3} 和 @add{A.1}', 0), '先试试： 查看 图 1.3 和 附 A.1');
 });
+
+test('definitions and theorems preview complete blocks in independent namespaces', () => {
+  const definition = '**定义 1.1.1** 第一行\n第二行';
+  const theorem = '> [!theorem] 定理 1.1.1\n> 条件\n>\n> $$ a=b $$\n>\n> 结论';
+  const source = `${definition}\n\n@#def{1.1.1}\n\n${theorem}\n\n@#thm{1.1.1}\n\n根据 @def{1.1.1} 和 @thm{1.1.1}。`;
+  const index = indexDocument(source);
+  assert.equal(index.byKey.get(targetKey('definition','1.1.1'))![0].markdown, definition);
+  assert.equal(index.byKey.get(targetKey('theorem','1.1.1'))![0].markdown, theorem);
+  assert.equal(contextExcerpt(source, source.indexOf('根据')), '根据 定义 1.1.1 和 定理 1.1.1。');
+  for (const ref of index.references.filter(ref => !ref.definition)) assert.equal(referenceSource(ref), source.slice(ref.from,ref.to));
+  assert.equal(indexDocument('内容\n@#def{1}\n@#thm{2}').targets.length, 1);
+});
+
+test('definition and theorem tokens remain literal in excluded material', () => {
+  const source = '`@def{1}`\n```md\n@#thm{1}\n```\n<!-- @def{1} -->\n\\@thm{1}\n$$\\text{@def{1}}$$\n@def{real}';
+  assert.deepEqual(indexDocument(source).references.map(r => r.label), ['real']);
+});

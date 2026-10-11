@@ -121,7 +121,9 @@ md.block.ruler.before('fence', 'math_block', (state, startLine, endLine, silent)
   let nextLine = startLine + 1;
   while (nextLine < endLine && state.bMarks[nextLine] < end + 2) nextLine++;
   const token = state.push('math_block', '', 0);
-  token.content = state.src.slice(start + 2, end);
+  // Markdown-it has removed blockquote prefixes in its line offsets.
+  const block = state.getLines(startLine, nextLine, state.blkIndent, false).trim();
+  token.content = block.slice(2, block.lastIndexOf('$$'));
   token.map = [startLine, nextLine]; token.block = true;
   state.line = nextLine;
   return true;

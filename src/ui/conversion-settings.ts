@@ -53,7 +53,7 @@ export function renderConversionSettings(parent: HTMLElement, host: ReferenceBuo
     presetsLabel.createSpan({ text: '包含常用预设' });
     const details = root.createEl('details', { cls: 'reflo-conversion-presets' });
     details.createEl('summary', { text: '查看预设模板' });
-    for (const kind of ['equation', 'figure', 'table', 'addon'] as const) {
+    for (const kind of Object.keys(kindName) as TargetKind[]) {
       details.createEl('p', { text: `${kindName[kind]}：${PRESET_TEMPLATES.filter(t => t.kind === kind).map(t => t.pattern).join('、')}` });
     }
 

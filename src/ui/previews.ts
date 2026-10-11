@@ -333,11 +333,14 @@ export class PreviewManager {
       } else {
         await MarkdownRenderer.render(this.host.app, target.markdown, card.body, card.path, card.component);
         if (revision !== card.revision || !this.cards.has(card)) return;
-        const caption = card.body.createDiv({ cls: 'reflo-object-caption' });
-        caption.createEl('strong', { text: displayName(target) });
-        if (target.caption) {
-          const description = caption.createDiv();
-          await MarkdownRenderer.render(this.host.app, target.caption, description, card.path, card.component);
+        const contentTarget = target.kind === 'definition' || target.kind === 'theorem';
+        if (!contentTarget || target.caption) {
+          const caption = card.body.createDiv({ cls: 'reflo-object-caption' });
+          if (!contentTarget) caption.createEl('strong', { text: displayName(target) });
+          if (target.caption) {
+            const description = caption.createDiv();
+            await MarkdownRenderer.render(this.host.app, target.caption, description, card.path, card.component);
+          }
         }
       }
       if (card.contextOpen && this.cards.has(card) && revision === card.revision) {
