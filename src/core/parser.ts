@@ -1,3 +1,4 @@
+import { indexHeadingLinks, indexHeadings } from './headings';
 import { displayName, type DocumentIndex, type Reference, type Span, type Target, targetKey, typedKinds } from './model';
 
 // Shared by the source parser, reading view and return-point summaries.
@@ -216,7 +217,8 @@ export function indexDocument(source: string): DocumentIndex {
     list.push(target);
     byKey.set(target.key, list);
   }
-  return { source, references, targets, byKey, excluded: allExcluded };
+  return { source, references, targets, byKey, excluded: allExcluded,
+    headingLinks: indexHeadingLinks(source, allExcluded), headings: indexHeadings(source, allExcluded) };
 }
 
 export function contextExcerpt(source: string, position: number): string {
@@ -225,7 +227,8 @@ export function contextExcerpt(source: string, position: number): string {
   return source.slice(start, end < 0 ? source.length : end).trim().replace(REFERENCE_PATTERN, raw => {
     const ref = parseReference(raw);
     return ref ? displayName(ref) : raw;
-  }).replace(/^\s*(?:#{1,6}\s+|>\s*|[-*+]\s+|\d+\.\s+)/, '')
+  }).replace(/\[\[([^\]\n|]+)(?:\|([^\]\n]*))?\]\]/g, (_, destination: string, alias?: string) => alias || destination.replace(/^#/, ''))
+    .replace(/^\s*(?:#{1,6}\s+|>\s*|[-*+]\s+|\d+\.\s+)/, '')
     .replace(/(\*\*|__|~~|`+)(.*?)\1/g, '$2').slice(0, 90) || '此处的阅读位置';
 }
 

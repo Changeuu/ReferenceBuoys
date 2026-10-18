@@ -1,3 +1,4 @@
+import type { HeadingReference, HeadingTarget } from './headings';
 export type TargetKind = 'equation' | 'figure' | 'table' | 'addon' | 'definition' | 'theorem';
 export const typedKinds = { fig: 'figure', tab: 'table', add: 'addon', def: 'definition', thm: 'theorem' } as const;
 export interface Span { from: number; to: number }
@@ -27,6 +28,8 @@ export interface DocumentIndex {
   targets: Target[];
   byKey: Map<string, Target[]>;
   excluded: Span[];
+  headingLinks: HeadingReference[];
+  headings: HeadingTarget[];
 }
 export const kindName: Record<TargetKind, string> = {
   equation: '式', figure: '图', table: '表', addon: '附', definition: '定义', theorem: '定理'
@@ -34,7 +37,8 @@ export const kindName: Record<TargetKind, string> = {
 export function targetKey(kind: TargetKind, label: string): string {
   return `${kind}\u0000${label}`;
 }
-export function displayName(item: Pick<Reference, 'kind' | 'label'>): string {
+export function displayName(item: { kind: TargetKind | 'heading'; label: string }): string {
+  if (item.kind === 'heading') return item.label;
   return `${kindName[item.kind]} ${item.label}`;
 }
 export function referenceSource(item: Pick<Reference, 'kind' | 'label'>): string {

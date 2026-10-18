@@ -217,8 +217,10 @@ test('return command consumes the newest buoy; a failed return keeps its buoy', 
     plugin.app.vault.getAbstractFileByPath = findFile;
     const command = plugin.commands.find((c: any) => c.id === 'return-to-buoy');
     command.checkCallback(false);
+    await new Promise(r => setTimeout(r, 0));
     const remainingIds = plugin.points.get(file.path).map((p: any) => p.id);
     command.checkCallback(false);
+    await new Promise(r => setTimeout(r, 0));
     return { failedIds, remainingIds, available: command.checkCallback(true), count: plugin.points.size };
   });
   expect(result).toEqual({ failedIds: [1, 2], remainingIds: [1], available: false, count: 0 });

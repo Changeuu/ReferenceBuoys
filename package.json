@@ -1,8 +1,8 @@
 {
   "name": "obsidian-reference-buoys",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
-  "description": "在 Obsidian 中预览公式和图表引用，并用临时浮标返回阅读位置。",
+  "description": "在 Obsidian 中预览公式、图表和章节引用，并用临时浮标返回阅读位置。",
   "type": "module",
   "scripts": {
     "dev": "node esbuild.config.mjs --watch",

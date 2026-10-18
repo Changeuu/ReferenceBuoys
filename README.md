@@ -6,9 +6,11 @@
 
 Reference Buoys makes it easier to write and read reference-heavy notes in Obsidian. Use simple labels like `@{1.13a}` to reference formulas, figures, tables, and other content within the same note. On desktop, hover to preview and pin multiple previews for comparison. On Android, tap to open a compact preview that collapses into a small label. Jump to the source and return using stacked markers.
 
+Existing heading links such as `[[#Energy]]` and `[[Mechanics#Energy]]` also support previews and return markers across notes.
+
 Built for **Live Preview**, with manual numbering and support for sublabels such as `1.13a` and `1.13b`.
 
-**Version 0.1.5 · Early release · Windows + Android (experimental) · Obsidian 1.8.0 or later**
+**Version 0.1.6 · Early release · Windows + Android (experimental) · Obsidian 1.8.0 or later**
 
 The plugin interface and bundled example notes currently use Simplified Chinese. This guide includes the Chinese names of commands and controls so you can find them.
 
@@ -48,6 +50,28 @@ The release is already built; you do not need Node.js or any build commands to i
 | Theorem | `@#thm{1.1.1}` below the content block | `@thm{1.1.1}` |
 
 Formula, figure, table, and general-content labels are independent: each type can use the same number.
+
+## Heading links across notes
+
+Keep your existing Obsidian wikilinks:
+
+```markdown
+[[#Energy]]
+[[Mechanics#Energy]]
+[[Mechanics#Energy|energy discussion]]
+```
+
+In **Live Preview** and **Reading view**, hover to preview a section, or click to jump and leave a return marker. On mobile, tap to preview, then use **跳转** (Jump) in the panel. The preview includes the heading and its subsections, ending before the next heading at the same or a higher level. Long sections scroll inside the preview; images and embedded content resolve relative to the target note.
+
+- Existing link text, aliases, and Markdown remain unchanged. No conversion or additional labels are needed.
+- The default-on **章节链接预览与返回** (Heading link previews and returns) switch controls this feature separately.
+- Ordinary clicks use the plugin. Ctrl/Meta/Shift/Alt clicks and middle-clicks retain Obsidian's behavior, without adding a plugin return marker. Move the caret into a link to edit its source.
+- Missing notes or headings show a message without creating a file or a return marker. Duplicate heading names follow Obsidian's heading resolution rules.
+- Return markers stay available across notes, so A → B → C can be followed by returns to B and A. You can also select an older marker directly; only the marker used is removed.
+- Returns prefer the original pane. If that pane was closed, an available pane is used. Cross-note markers show `↩` and the source note name on desktop; mobile keeps a small `↩` tag.
+- This feature handles heading wikilinks in the note body. Plain `[[Note]]` links, `[[#^block]]` links, embeds, and Source mode keep their existing behavior. The numbered `@{...}` references still refer to the current note.
+
+Try `章节引用体验.md` and its two companion notes from the example folder. If another plugin also handles heading hovers, this switch lets you choose which preview to use.
 
 ## Formula references
 
@@ -216,7 +240,7 @@ Each return marker shows a short excerpt from where you left. An arrow indicates
 
 - Inserting or deleting text in the same Live Preview editor moves return positions along with the edits.
 - If the original text is deleted, its marker is marked as unavailable and lets you return to a nearby position.
-- Each note has its own markers. Multiple panes showing the same note share that note's markers during the session.
+- All note panes share the current session's return markers, including departures in other notes. The “clear this note” command clears markers whose departure was in the active note.
 - **Markers and preview windows are temporary.** They are cleared when Obsidian exits or the plugin is disabled or reloaded. Settings are saved.
 - Duplicate labels produce a list of possible targets so you can choose the intended one.
 
@@ -308,9 +332,9 @@ Adjust whether context is expanded by default, autocomplete, and conversion temp
 
 ## Scope and testing
 
-The current release targets **Windows desktop and Android (experimental), references within the same note, and Live Preview**. Cross-file references and automatic numbering are not supported. iOS has not been tested.
+The current release targets **Windows desktop and Android (experimental), especially Live Preview**. Numbered references stay within a note; heading wikilinks also work across notes. Automatic numbering is not supported. iOS has not been tested.
 
-Automated tests cover parsing, context extraction, position tracking, selected-reference conversion, template generation, definition/theorem target creation, formula overflow, CodeMirror widgets, and browser interactions. Earlier versions have been tried manually in Obsidian on Windows. The new 0.1.5 features and Android support still need testing in Obsidian. Browser component tests use a simplified Obsidian API stub with real CodeMirror and MathJax, so they do not replace app testing.
+Automated tests cover parsing, context extraction, position tracking, heading section boundaries, cross-note return stacks, selected-reference conversion, template generation, definition/theorem target creation, formula overflow, CodeMirror widgets, and browser interactions. Earlier versions have been tried manually in Obsidian on Windows. The new 0.1.6 heading features and Android support still need testing in Obsidian. Browser component tests use a simplified Obsidian API stub with real CodeMirror and MathJax, so they do not replace app testing.
 
 Suggested checks when trying the plugin:
 
@@ -324,6 +348,15 @@ Suggested checks when trying the plugin:
 To [report an issue](https://github.com/Changeuu/ReferenceBuoys/issues), include your Obsidian version, theme, a minimal example note, and the steps that trigger the problem. Use sample content that you are comfortable sharing.
 
 ## Changelog
+
+### 0.1.6
+
+- Add previews and return markers to native same-note and cross-note heading wikilinks, including aliases.
+- Preview complete sections and subsections using the target note's resource paths.
+- Keep stacked returns visible across notes; restore the original pane, cursor, and viewport when available.
+- Reuse the compact mobile preview and return tags; add an independent heading-link switch.
+- Preserve native modified-click gestures and editable link source; handle missing targets without creating files.
+
 
 ### 0.1.5
 

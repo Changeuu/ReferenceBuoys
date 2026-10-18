@@ -140,6 +140,7 @@ md.renderer.rules.math = (tokens, idx) => renderMath(tokens[idx].content, false)
 export class MarkdownRenderer {
   static async render(_app: any, source: string, el: HTMLElement, _path: string, _component: any) {
     const expanded = source.replace(/!\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g, (_, name) => `![](/examples/${encodeURIComponent(name)})`);
+    el.dataset.renderPath = _path;
     el.innerHTML = md.render(expanded);
     await finishRenderMath();
   }
@@ -167,3 +168,18 @@ Object.assign(HTMLElement.prototype, {
   removeClass(...classes: string[]) { this.classList.remove(...classes); },
   toggleClass(name: string, value: boolean) { this.classList.toggle(name, value); }
 });
+
+// Tests exercise our routing/bounds; real Obsidian supplies its own heading matcher.
+export function resolveSubpath(cache: any, subpath: string) {
+  const normalize = (s: string) => s.replace(/[*_`]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const segments = subpath.slice(1).split('#').map(normalize);
+  let candidates = cache.headings, current: any;
+  for (const segment of segments) {
+    current = candidates.find((h: any) => normalize(h.heading) === segment);
+    if (!current) return null;
+    const tail = candidates.slice(candidates.indexOf(current) + 1);
+    const stop = tail.findIndex((h: any) => h.level <= current.level);
+    candidates = tail.slice(0, stop < 0 ? undefined : stop);
+  }
+  return { type: 'heading', current };
+}

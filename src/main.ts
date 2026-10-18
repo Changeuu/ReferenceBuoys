@@ -1,4 +1,4 @@
-import { Plugin, Platform, MarkdownView, TFile, Notice, Menu, editorInfoField, type Editor, type MarkdownPostProcessorContext } from 'obsidian';
+import { Plugin, Platform, resolveSubpath, type WorkspaceLeaf, MarkdownView, TFile, Notice, Menu, editorInfoField, type Editor, type MarkdownPostProcessorContext } from 'obsidian';
 import { ChangeSet } from '@codemirror/state';
 import { EditorView, type ViewUpdate } from '@codemirror/view';
 import { indexDocument, contextExcerpt, parseReference, REFERENCE_PATTERN } from './core/parser';
@@ -11,6 +11,8 @@ import { PreviewManager, mathText, type ReferenceOrigin } from './ui/previews';
 import { BuoyPanel } from './ui/buoys';
 import { SelectionConverter } from './conversion';
 import { loadProfiles } from './core/conversion';
+import { HeadingLinks } from './heading-links';
+import type { HeadingReference, NavigationTarget } from './core/headings';
 import { TargetMarker } from './target-marker';
 
 export default class ReferenceBuoysPlugin extends Plugin {
@@ -20,6 +22,10 @@ export default class ReferenceBuoysPlugin extends Plugin {
   previews!: PreviewManager;
   converter!: SelectionConverter;
   targetMarker!: TargetMarker;
+  headingLinks!: HeadingLinks;
+  private originLeaves = new Map<number, WorkspaceLeaf>();
+  private navigating = false;
+  private followGeneration = 0;
   private cache = new Map<string, DocumentIndex>();
   private anchorSources = new Map<string, string>();
   private editors = new Map<EditorView, string>();
@@ -35,6 +41,7 @@ export default class ReferenceBuoysPlugin extends Plugin {
     this.settings = { ...DEFAULT_SETTINGS, ...(saved?.settings ?? {}) };
     this.settings.hoverDelay = Math.max(100, Math.min(900, Number(this.settings.hoverDelay) || 320));
     this.settings.previewWidth = Math.max(320, Math.min(760, Number(this.settings.previewWidth) || 460));
+    this.settings.headingLinks = this.settings.headingLinks !== false;
     this.settings.bodyMathScroll = this.settings.bodyMathScroll !== false;
     this.settings.conversionProfiles = loadProfiles(saved?.settings?.conversionProfiles);
     if (!this.settings.conversionProfiles.some(p => p.id === this.settings.activeConversionProfile)) {
@@ -44,6 +51,7 @@ export default class ReferenceBuoysPlugin extends Plugin {
     this.previews = new PreviewManager(this);
     this.converter = new SelectionConverter(this);
     this.targetMarker = new TargetMarker(this);
+    this.headingLinks = new HeadingLinks(this);
     this.addSettingTab(new ReferenceSettingsTab(this.app, this));
     this.registerEditorExtension(editorExtensions(this));
     this.registerEditorSuggest(new ReferenceSuggest(this));
@@ -72,6 +80,7 @@ export default class ReferenceBuoysPlugin extends Plugin {
       this.previews.rename(old, file.path); this.refreshPanels();
     }));
     this.registerEvent(this.app.vault.on('delete', file => {
+      for (const point of this.points.get(file.path) ?? []) this.originLeaves.delete(point.id);
       this.points.delete(file.path); this.cache.delete(file.path); this.anchorSources.delete(file.path); this.previews.refresh(file.path); this.refreshPanels();
     }));
     this.registerDomEvent(document, 'keydown', event => { if (event.key === 'Escape') this.previews.hideForNavigation(); });
@@ -88,7 +97,7 @@ export default class ReferenceBuoysPlugin extends Plugin {
     this.addCommand({ id: 'return-to-buoy', name: '返回上一个浮标', checkCallback: checking => {
       const view = this.app.workspace.getActiveViewOfType(MarkdownView);
       const path = view?.file?.path;
-      const points = path ? this.points.get(path) : undefined;
+      const points = this.returnPoints();
       if (!view || !path || !points?.length) return false;
       if (!checking) void this.returnTo(points.at(-1)!, view);
       return true;
@@ -100,11 +109,13 @@ export default class ReferenceBuoysPlugin extends Plugin {
     this.app.workspace.onLayoutReady(() => { if (!this.disposed) this.refreshPanels(); });
   }
   onunload(): void {
-    this.disposed = true; this.jumpGeneration++;
+    this.disposed = true; this.jumpGeneration++; this.followGeneration++;
     if (this.uiTimer !== undefined) window.clearTimeout(this.uiTimer);
     this.previews?.destroy();
     this.converter?.destroy();
     this.targetMarker?.destroy();
+    this.headingLinks?.destroy();
+    this.originLeaves.clear();
     for (const [view, panel] of this.panels) { panel.destroy(); view.contentEl.classList.remove('reflo-body-math-scroll'); }
     this.panels.clear(); this.points.clear(); this.cache.clear(); this.anchorSources.clear(); this.editors.clear();
   }
@@ -190,6 +201,7 @@ export default class ReferenceBuoysPlugin extends Plugin {
   }
   private viewForOrigin(origin: ReferenceOrigin): MarkdownView | undefined {
     const leaves = this.app.workspace.getLeavesOfType('markdown');
+    if (origin.view?.file?.path === origin.path && leaves.some(leaf => leaf.view === origin.view)) return origin.view;
     if (origin.cm?.dom.isConnected) {
       const view = leaves.find(leaf => leaf.view instanceof MarkdownView && leaf.view.file?.path === origin.path && leaf.view.contentEl.contains(origin.cm!.dom))?.view;
       if (view instanceof MarkdownView) return view;
@@ -237,7 +249,53 @@ export default class ReferenceBuoysPlugin extends Plugin {
     await this.jump(candidates[0], origin);
   }
 
-  async jump(target: Target, origin: ReferenceOrigin): Promise<void> {
+  headingPath(linkpath: string, sourcePath: string): string | undefined {
+    if (!linkpath) return sourcePath;
+    const file = this.app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath);
+    return file?.extension === 'md' ? file.path : undefined;
+  }
+  navigationTargets(index: DocumentIndex | undefined, key: string): NavigationTarget[] {
+    if (!index) return [];
+    if (!key.startsWith('heading\u0000')) return index.byKey.get(key) ?? [];
+    // Use Obsidian's heading matching rules (including nested paths and formatted headings),
+    // with positions parsed from the live buffer rather than a potentially stale metadata cache.
+    const result = resolveSubpath({ headings: index.headings.map(h => ({
+      heading: h.label, level: h.level, position: {
+        start: { line: h.line, col: 0, offset: h.from },
+        end: { line: h.line, col: h.focus.to - h.from, offset: h.focus.to }
+      }
+    })) }, '#' + key.slice('heading\u0000'.length));
+    if (result?.type !== 'heading') return [];
+    const target = index.headings.find(h => h.from === result.current.position.start.offset);
+    return target ? [{ ...target, key }] : [];
+  }
+  async followHeading(el: HTMLElement, ref: HeadingReference, origin: ReferenceOrigin): Promise<void> {
+    const generation = ++this.followGeneration;
+    const path = this.headingPath(ref.linkpath, origin.path);
+    const target = path ? this.navigationTargets(await this.getIndex(path), ref.key)[0] : undefined;
+    if (this.disposed || generation !== this.followGeneration || !el.isConnected || !this.settings.headingLinks) return;
+    if (origin.cm && origin.cm.state.field(editorInfoField, false)?.file?.path !== origin.path) return;
+    if (!target) { await this.previews.open(el, ref, origin); return; }
+    this.previews.closeTransient();
+    await this.jump(target, origin, path);
+  }
+  originForPreview(origin: ReferenceOrigin): ReferenceOrigin {
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!view?.file || view.file.path === origin.path) return origin;
+    const cm = this.cmForView(view);
+    const from = cm ? cm.lineBlockAtHeight(cm.scrollDOM.scrollTop).from : view.editor.posToOffset(view.editor.getCursor());
+    return { path: view.file.path, from, to: from, cm, view };
+  }
+  returnPoints(): ReturnPoint[] { return [...this.points.values()].flat().sort((a, b) => a.id - b.id); }
+
+  async jump(target: NavigationTarget, origin: ReferenceOrigin, targetPath = origin.path): Promise<void> {
+    if (this.navigating || this.disposed) return;
+    this.navigating = true;
+    try { await this.performJump(target, origin, targetPath); }
+    catch (error) { console.error('Reference Buoys: navigation failed', error); new Notice('无法打开目标笔记，请重试。'); }
+    finally { this.navigating = false; }
+  }
+  private async performJump(target: NavigationTarget, origin: ReferenceOrigin, targetPath: string): Promise<void> {
     let view = this.viewForOrigin(origin);
     if (!view) {
       const file = this.app.vault.getAbstractFileByPath(origin.path);
@@ -248,10 +306,12 @@ export default class ReferenceBuoysPlugin extends Plugin {
     }
     if (!view?.file) return;
     const index = await this.getIndex(origin.path);
-    const candidates = index?.byKey.get(target.key) ?? [];
+    const destinationIndex = targetPath === origin.path ? index : await this.getIndex(targetPath);
+    const candidates = this.navigationTargets(destinationIndex, target.key);
     const current = candidates.length === 1 ? candidates[0] : candidates.find(t => t.from === target.from);
-    if (!current || !index) { new Notice('目标已变化，请重新预览后跳转。'); return; }
-    const cm = this.cmForView(view);
+    if (this.disposed || view.file?.path !== origin.path) return;
+    if (!current || !index || !destinationIndex) { new Notice('目标已变化，请重新预览后跳转。'); return; }
+    const cm = view.getMode() === 'source' ? this.cmForView(view) : undefined;
     let safeFrom = Math.max(0, Math.min(origin.from, index.source.length));
     let safeTo = Math.max(safeFrom, Math.min(origin.to, index.source.length));
     let viewportFrom = safeFrom, viewportOffset = 0, scrollLeft = 0;
@@ -284,12 +344,24 @@ export default class ReferenceBuoysPlugin extends Plugin {
       cursorAnchor, cursorHead, viewportFrom, viewportOffset, scrollLeft,
       excerpt: contextExcerpt(index.source, safeFrom), heading: headingAt(index.source, safeFrom), lost: false
     };
+    const originLeaf = view.leaf;
+    if (targetPath !== origin.path) {
+      const file = this.app.vault.getAbstractFileByPath(targetPath);
+      if (!(file instanceof TFile)) { new Notice('目标笔记已不存在。'); return; }
+      await originLeaf.openFile(file);
+      if (this.disposed || !(originLeaf.view instanceof MarkdownView) || originLeaf.view.file?.path !== targetPath) return;
+      view = originLeaf.view;
+    }
     points.push(point); this.points.set(origin.path, points);
+    this.originLeaves.set(point.id, originLeaf);
     this.app.workspace.setActiveLeaf(view.leaf, { focus: !this.isMobile });
     this.jumpGeneration++;
-    if (cm && view.getMode() === 'source') {
+    const destinationCM = this.cmForView(view);
+    if (destinationCM && view.getMode() === 'source') {
+      const cm = destinationCM;
       // Keep the caret outside the math source so Live Preview continues rendering the formula.
-      const cursor = Math.min(current.to + (index.source[current.to] === '\n' ? 1 : 0), cm.state.doc.length);
+      const cursor = current.kind === 'heading' ? current.focus.from
+        : Math.min(current.to + (destinationIndex.source[current.to] === '\n' ? 1 : 0), cm.state.doc.length);
       cm.dispatch({ selection: { anchor: cursor }, effects: [EditorView.scrollIntoView(current.focus.from, { y: 'center' }), flashEffect.of(current.focus)] });
       this.flashRendered(view, current);
       this.clearFlashLater(cm);
@@ -297,16 +369,29 @@ export default class ReferenceBuoysPlugin extends Plugin {
       view.setEphemeralState({ line: current.line });
       this.flashRendered(view, current);
     }
+    this.previews.setActivePath(targetPath);
     this.refreshPanels();
   }
 
   async returnTo(point: ReturnPoint, preferred?: MarkdownView): Promise<void> {
+    if (this.navigating || this.disposed) return;
+    this.navigating = true;
+    try { await this.performReturn(point, preferred); }
+    catch (error) { console.error('Reference Buoys: return failed', error); new Notice('无法返回原笔记，浮标已保留。'); }
+    finally { this.navigating = false; }
+  }
+  private async performReturn(point: ReturnPoint, preferred?: MarkdownView): Promise<void> {
     const file = this.app.vault.getAbstractFileByPath(point.path);
     if (!(file instanceof TFile)) { new Notice('原笔记已不存在。'); return; }
-    let view = preferred?.file?.path === point.path ? preferred : this.viewForOrigin({ path: point.path, from: point.from, to: point.to });
+    const original = this.originLeaves.get(point.id);
+    const liveOriginal = original && this.app.workspace.getLeavesOfType('markdown').includes(original) ? original : undefined;
+    let view = liveOriginal?.view instanceof MarkdownView && liveOriginal.view.file?.path === point.path
+      ? liveOriginal.view : liveOriginal ? undefined : this.viewForOrigin({ path: point.path, from: point.from, to: point.to });
     if (!view) {
-      const leaf = this.app.workspace.getLeaf(false); await leaf.openFile(file);
-      if (leaf.view instanceof MarkdownView) view = leaf.view;
+      const leaf = liveOriginal ?? preferred?.leaf ?? this.app.workspace.getLeaf(false);
+      await leaf.openFile(file);
+      if (this.disposed) return;
+      if (leaf.view instanceof MarkdownView && leaf.view.file?.path === point.path) view = leaf.view;
     }
     if (!view) return;
     this.previews.hideForNavigation();
@@ -318,7 +403,7 @@ export default class ReferenceBuoysPlugin extends Plugin {
       cm.dispatch({ selection: { anchor: bound(point.cursorAnchor), head: bound(point.cursorHead) },
         effects: [EditorView.scrollIntoView(bound(point.viewportFrom), { y: 'start' }), flashEffect.of({ from: bound(point.from), to: bound(point.to) })] });
       const restore = () => {
-        if (this.disposed || generation !== this.jumpGeneration || !cm.dom.isConnected) return;
+        if (this.disposed || generation !== this.jumpGeneration || !cm.dom.isConnected || cm.state.field(editorInfoField, false)?.file?.path !== point.path) return;
         cm.requestMeasure({ read: () => cm.lineBlockAt(bound(point.viewportFrom)).top + point.viewportOffset,
           write: top => { if (generation === this.jumpGeneration) { cm.scrollDOM.scrollTop = top; cm.scrollDOM.scrollLeft = point.scrollLeft; } } });
       };
@@ -328,11 +413,17 @@ export default class ReferenceBuoysPlugin extends Plugin {
       if (!this.isMobile) cm.focus();
       this.clearFlashLater(cm);
     } else {
-      view.setEphemeralState({ line: view.editor.offsetToPos(point.from).line });
-      const scroller = view.contentEl.querySelector('.markdown-preview-view');
-      if (scroller) scroller.scrollTop = point.viewportOffset;
+      const offset = Math.min(point.from, view.editor.getValue().length);
+      view.setEphemeralState({ line: view.editor.offsetToPos(offset).line });
+      const restore = () => {
+        if (this.disposed || generation !== this.jumpGeneration || view.file?.path !== point.path) return;
+        const scroller = view.contentEl.querySelector('.markdown-preview-view');
+        if (scroller) scroller.scrollTop = point.viewportOffset;
+      };
+      restore(); window.setTimeout(restore, 80); window.setTimeout(restore, 180);
     }
     if (point.lost) new Notice('出发处的原文已被删除，已返回附近位置。');
+    this.previews.setActivePath(point.path);
     this.removeBuoy(point);
   }
   private clearFlashLater(cm: EditorView): void {
@@ -340,7 +431,7 @@ export default class ReferenceBuoysPlugin extends Plugin {
       if (!this.disposed && cm.dom.isConnected) cm.dispatch({ effects: flashEffect.of(null) });
     }, 1800);
   }
-  private flashRendered(view: MarkdownView, target: Target): void {
+  private flashRendered(view: MarkdownView, target: NavigationTarget): void {
     window.setTimeout(() => {
       if (this.disposed || view.file?.path === undefined) return;
       if (target.kind === 'equation') {
@@ -354,12 +445,14 @@ export default class ReferenceBuoysPlugin extends Plugin {
     }, 100);
   }
   removeBuoy(point: ReturnPoint): void {
+    this.originLeaves.delete(point.id);
     const remaining = (this.points.get(point.path) ?? []).filter(p => p.id !== point.id);
     if (remaining.length) this.points.set(point.path, remaining);
     else this.points.delete(point.path);
     this.refreshPanels();
   }
   clearBuoys(path?: string): void {
+    for (const point of this.returnPoints()) if (!path || point.path === path) this.originLeaves.delete(point.id);
     if (path) this.points.delete(path);
     else this.points.clear();
     this.refreshPanels();
@@ -384,6 +477,7 @@ export default class ReferenceBuoysPlugin extends Plugin {
       if (!this.panels.has(view)) this.panels.set(view, new BuoyPanel(this, view));
       this.panels.get(view)!.render();
     }
+    this.headingLinks?.refresh(live);
     for (const [view, panel] of this.panels) if (!live.has(view)) {
       panel.destroy(); view.contentEl.classList.remove('reflo-body-math-scroll'); this.panels.delete(view);
     }
@@ -392,6 +486,7 @@ export default class ReferenceBuoysPlugin extends Plugin {
   private async postProcess(el: HTMLElement, ctx: MarkdownPostProcessorContext): Promise<void> {
     const index = await this.getIndex(ctx.sourcePath);
     if (!index || this.disposed) return;
+    this.headingLinks.bindReading(el, ctx, index);
     const doc = el.ownerDocument;
     const walker = doc.createTreeWalker(el, NodeFilter.SHOW_TEXT);
     const nodes: Text[] = [];
