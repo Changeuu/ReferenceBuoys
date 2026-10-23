@@ -164,6 +164,21 @@ test('mobile conversion uses the existing command and an isolated undo step', as
   expect(result).toEqual({ converted: '@{1.13a}', restored: '式（1.13a）' });
 });
 
+test('mobile conversion accepts an explicitly templated inline math citation', async ({ page }) => {
+  const result = await page.evaluate(() => {
+    const { cm, plugin, view } = window.lab;
+    const text = '（$2.1.1$）';
+    window.lab.replace(0, 0, text + '\n\n');
+    plugin.settings.conversionProfiles[0].templates.push({ pattern: '（${n}$）', kind: 'equation' });
+    cm.dispatch({ selection: { anchor: 0, head: text.length } });
+    plugin.commands.find((c: any) => c.id === 'convert-selected-reference').editorCallback(view.editor);
+    const converted = cm.state.doc.line(1).text;
+    window.lab.undo();
+    return { converted, restored: cm.state.doc.line(1).text };
+  });
+  expect(result).toEqual({ converted: '@{2.1.1}', restored: '（$2.1.1$）' });
+});
+
 test('rapid taps keep the latest preview even when an earlier lookup resolves last', async ({ page }) => {
   await page.evaluate(async () => {
     const { plugin, file, cm } = window.lab;

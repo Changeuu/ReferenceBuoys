@@ -1,4 +1,4 @@
-import { kindName, referenceSource, type TargetKind } from './model';
+import { kindName, referenceSource, type DocumentIndex, type Span, type TargetKind } from './model';
 
 export interface ConversionTemplate { pattern: string; kind: TargetKind }
 export interface ConversionProfile {
@@ -149,6 +149,30 @@ export function analyzeSelectedReference(text: string, profile: ConversionProfil
 
 export function matchSelectedReference(text: string, profile: ConversionProfile): ConversionMatch[] {
   return analyzeSelectedReference(text, profile).matches;
+}
+
+/** A citation may use $...$ to typeset its label. Only a complete, label-only inline
+ * math span can participate; templates cannot bypass protection of other content. */
+export function analyzeDocumentSelection(index: DocumentIndex, range: Span, profile: ConversionProfile): ConversionAnalysis {
+  const overlaps = (span: Span) => span.from < range.to && range.from < span.to;
+  const mathLabels: string[] = [];
+  for (const span of index.excluded.filter(overlaps)) {
+    const raw = index.source.slice(span.from, span.to);
+    const label = /^\$([^$\r\n]+)\$$/.exec(raw)?.[1].trim();
+    // Code, comments, metadata and display math do not have this exact shape.
+    // Containment also prevents replacing a fragment inside a larger formula.
+    if (span.from < range.from || span.to > range.to || !label || !validLabel(label)) {
+      return { matches: [], error: '代码和公式内容保持原样。若是用 $…$ 排版的引用编号，请连同完整引用一起选中并匹配模板。' };
+    }
+    mathLabels.push(label);
+  }
+  if (index.references.some(overlaps)) return { matches: [], error: '所选内容已包含标准引用。' };
+  const analysis = analyzeSelectedReference(index.source.slice(range.from, range.to), profile);
+  if (!mathLabels.length || !analysis.matches.length) return analysis;
+  const matches = analysis.matches.filter(match => mathLabels.every(label => label === match.label));
+  return matches.length ? { matches } : {
+    matches: [], error: '所选行内数学中的编号与模板提取的编号不一致，已保留原文。'
+  };
 }
 
 /** Local suggestion from one example; callers keep it editable and require an explicit save. */

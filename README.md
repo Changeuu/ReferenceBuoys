@@ -10,7 +10,7 @@ Existing heading links such as `[[#Energy]]` and `[[Mechanics#Energy]]` also sup
 
 Built for **Live Preview**, with manual numbering and support for sublabels such as `1.13a` and `1.13b`.
 
-**Version 0.1.6 · Early release · Windows + Android (experimental) · Obsidian 1.8.0 or later**
+**Version 0.1.7 · Early release · Windows + Android (experimental) · Obsidian 1.8.0 or later**
 
 The plugin interface and bundled example notes currently use Simplified Chinese. This guide includes the Chinese names of commands and controls so you can find them.
 
@@ -264,7 +264,7 @@ You can also select normally and run **转换选中的引用** (Convert selected
 
 - **Select one complete reference, including its own brackets.** Whole sentences, multiple references, multiple lines, and multiple selections are not batch-converted.
 - Each conversion is a separate undo step. Press **Ctrl+Z** to restore the original text.
-- Code, math content, and existing plugin reference tokens are left unchanged.
+- Code, display formulas, partial selections inside math, and existing plugin reference tokens are left unchanged. A complete inline math span containing only the reference label can be converted with an explicit matching template.
 - Conversion changes only the reference text. The target formula still needs its `\tag{label}`; other targets need the corresponding label markers.
 - In **选中转换** (Selection conversion) settings, you can disable modifier-drag conversion or change Alt to Ctrl. The command and context menu remain available.
 
@@ -292,6 +292,16 @@ Result:   @{1.1.4}
 If both parts use `1.1.4`, use `公式 [[#^eq-{n}|({n})]]` to check that they agree.
 
 To create a template from an example, expand **从示例生成模板** (Generate from example). Paste the original reference, enter its actual label, select the content type, then click **生成模板**. You can edit the suggestion and see the conversion result before clicking **添加到当前模板组** (Add to current group). A single example cannot reveal every variable part, so check the suggestion against a second reference. Generation runs locally and does not scan or change your note.
+
+If a book typesets reference numbers with inline math, include the dollar signs in your template:
+
+```text
+Original: （$2.1.1$）
+Template: （${n}$）
+Result:   @{2.1.1}
+```
+
+Select the **whole citation**, including both brackets and the complete `$...$` span. Full-width and half-width brackets both work. Every selected inline math span must contain only the same label extracted by the template; formulas such as `$x+1$`, `$$...$$` blocks, and selections of only the digits inside math remain protected. The plugin does not automatically strip dollar signs or scan the note.
 
 The ZIP includes `选中转换练习.md` for practicing conversion.
 
@@ -334,7 +344,7 @@ Adjust whether context is expanded by default, autocomplete, and conversion temp
 
 The current release targets **Windows desktop and Android (experimental), especially Live Preview**. Numbered references stay within a note; heading wikilinks also work across notes. Automatic numbering is not supported. iOS has not been tested.
 
-Automated tests cover parsing, context extraction, position tracking, heading section boundaries, cross-note return stacks, selected-reference conversion, template generation, definition/theorem target creation, formula overflow, CodeMirror widgets, and browser interactions. Earlier versions have been tried manually in Obsidian on Windows. The new 0.1.6 heading features and Android support still need testing in Obsidian. Browser component tests use a simplified Obsidian API stub with real CodeMirror and MathJax, so they do not replace app testing.
+Automated tests cover parsing, context extraction, position tracking, heading section boundaries, cross-note return stacks, selected-reference conversion, template generation, definition/theorem target creation, formula overflow, CodeMirror widgets, and browser interactions. Earlier versions have been tried manually in Obsidian on Windows. The 0.1.7 conversion fix and Android support still need testing in Obsidian. Browser component tests use a simplified Obsidian API stub with real CodeMirror and MathJax, so they do not replace app testing.
 
 Suggested checks when trying the plugin:
 
@@ -348,6 +358,13 @@ Suggested checks when trying the plugin:
 To [report an issue](https://github.com/Changeuu/ReferenceBuoys/issues), include your Obsidian version, theme, a minimal example note, and the steps that trigger the problem. Use sample content that you are comfortable sharing.
 
 ## Changelog
+
+### 0.1.7
+
+- Fix selected citations such as `（$2.1.1$）` being rejected as formula content even when their custom template matches.
+- Allow complete inline math labels to convert through the command or modifier-drag gesture, with one-step undo.
+- Keep code, display math, partial math selections, and conflicting inline labels protected.
+
 
 ### 0.1.6
 

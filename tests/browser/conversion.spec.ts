@@ -191,3 +191,45 @@ test('disagreeing repeated labels show an actionable error without changing the 
   await page.getByRole('textbox', { name: '试配引用', exact: true }).fill(sample);
   await expect(page.locator('output')).toContainText('不一致');
 });
+
+test('a template with an inline math label converts the full citation and undoes in one step', async ({ page }) => {
+  const sample = '（$2.1.1$）';
+  const text = `根据${sample}可知，另一处${sample}保持原样。`;
+  await prepare(page, text);
+  await page.evaluate(() => window.lab.plugin.settings.conversionProfiles[0].templates.push({ pattern: '（${n}$）', kind: 'equation' }));
+  await page.evaluate(() => window.lab.showConversionSettings());
+  await page.getByRole('textbox', { name: '试配引用', exact: true }).fill(sample);
+  await expect(page.locator('output')).toHaveText('→ @{2.1.1}');
+  await page.locator('.test-modal').evaluate(el => el.remove());
+  await selectText(page, sample); await page.keyboard.press('Control+Alt+r');
+  expect(await doc(page)).toBe(text.replace(sample, '@{2.1.1}'));
+  await page.keyboard.press('Control+z'); expect(await doc(page)).toBe(text);
+});
+
+test('Alt drag also converts complete inline math citations without touching the other occurrence', async ({ page }) => {
+  const sample = '（$2.1.1$）', text = `由${sample}得到结果。另一处${sample}保持原样。`;
+  await prepare(page, text);
+  await page.evaluate(() => window.lab.plugin.settings.conversionProfiles[0].templates.push({ pattern: '(${n}$)', kind: 'equation' }));
+  await drag(page, 1, 1 + sample.length, 'Alt');
+  await expect.poll(() => doc(page)).toBe(text.replace(sample, '@{2.1.1}'));
+  await page.keyboard.press('Control+z'); expect(await doc(page)).toBe(text);
+});
+
+test('inline math citations keep code protection, partial-selection protection and stale-choice checks', async ({ page }) => {
+  const sample = '（$2.1.1$）', text = `\`${sample}\`\n${sample}`;
+  await prepare(page, text);
+  await page.evaluate(() => window.lab.plugin.settings.conversionProfiles[0].templates.push(
+    { pattern: '（${n}$）', kind: 'equation' }, { pattern: '（${n}$）', kind: 'figure' }, { pattern: '{n}', kind: 'equation' }
+  ));
+  await selectText(page, sample); await page.keyboard.press('Control+Alt+r');
+  expect(await doc(page)).toBe(text);
+  expect(await page.evaluate(() => (window as any).notices.at(-1))).toContain('保持原样');
+  await selectText(page, '2.1.1', 1); await page.keyboard.press('Control+Alt+r');
+  expect(await doc(page)).toBe(text);
+  await selectText(page, sample, 1); await page.keyboard.press('Control+Alt+r');
+  await expect(page.locator('.reflo-conversion-choice')).toHaveCount(2);
+  await page.evaluate(() => window.lab.replace(0, 0, '新增'));
+  await page.getByRole('button', { name: '（${n}$） → @{2.1.1}', exact: true }).click();
+  expect(await doc(page)).toBe('新增' + text);
+  expect(await page.evaluate(() => (window as any).notices.at(-1))).toContain('已变化');
+});

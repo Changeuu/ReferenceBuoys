@@ -3,7 +3,7 @@ import { EditorView } from '@codemirror/view';
 import { isolateHistory } from '@codemirror/commands';
 import type ReferenceBuoysPlugin from './main';
 import { indexField } from './editor';
-import { analyzeSelectedReference, type ConversionMatch } from './core/conversion';
+import { analyzeDocumentSelection, type ConversionMatch } from './core/conversion';
 
 export class SelectionConverter {
   private modal?: Modal;
@@ -24,12 +24,9 @@ export class SelectionConverter {
     const range = selection.main;
     if (range.empty || selection.ranges.length !== 1) { new Notice('请选中一个完整引用，例如 式（1.13a）。'); return; }
     const index = cm.state.field(indexField);
-    const overlaps = (r: { from: number; to: number }) => r.from < range.to && range.from < r.to;
-    if (index.excluded.some(overlaps)) { new Notice('代码和公式内容保持原样，请选中正文中的引用。'); return; }
-    if (index.references.some(overlaps)) { new Notice('所选内容已包含标准引用。'); return; }
     const profile = this.host.settings.conversionProfiles.find(p => p.id === this.host.settings.activeConversionProfile)
       ?? this.host.settings.conversionProfiles[0];
-    const { matches, error } = analyzeSelectedReference(doc.sliceString(range.from, range.to), profile);
+    const { matches, error } = analyzeDocumentSelection(index, range, profile);
     if (!matches.length) { new Notice(error ?? '所选内容不匹配当前模板。可在“引用浮标 → 选中转换”中添加模板。'); return; }
     const path = cm.state.field(editorInfoField, false)?.file?.path;
     const apply = (match: ConversionMatch) => {
