@@ -4,6 +4,7 @@ import type { ChangeDesc } from '@codemirror/state';
 import { displayName, type Target } from '../core/model';
 import type { NavigationTarget, PreviewReference } from '../core/headings';
 import { contextAround } from '../core/context';
+import { focusMath } from '../core/math-preview';
 import type ReferenceBuoysPlugin from '../main';
 import { clamp, iconButton } from './dom';
 
@@ -26,6 +27,8 @@ interface Preview {
   locationEl: HTMLElement;
   pinButton: HTMLButtonElement;
   jumpButton: HTMLButtonElement;
+  formulaButton: HTMLButtonElement;
+  formulaExpanded: boolean;
   target?: NavigationTarget;
   heading: boolean;
   mobile: boolean;
@@ -124,6 +127,8 @@ export class PreviewManager {
     const body = el.createDiv({ cls: 'reflo-preview-body markdown-rendered' });
     const context = el.createDiv({ cls: 'reflo-preview-context markdown-rendered' });
     const footer = el.createDiv({ cls: 'reflo-preview-footer' });
+    const formulaButton = footer.createEl('button', { text: '展开完整公式组', cls: 'reflo-text-button' });
+    formulaButton.hidden = true;
     const contextButton = footer.createEl('button', { text: this.host.settings.showContext ? '收起上下文' : '展开上下文', cls: 'reflo-text-button' });
     if (mobile) {
       jumpButton.className = 'reflo-mobile-jump';
@@ -137,8 +142,12 @@ export class PreviewManager {
     card = { el, body, context, component, abort, path, heading: ref.kind === 'heading', key: ref.key, origin: { ...origin },
       targetFrom: this.host.navigationTargets(index, ref.key)[0]?.from ?? -1, pinned: false,
       contextOpen: ref.kind !== 'heading' && this.host.settings.showContext, revision: 0, contentSignature: '', nameEl, locationEl, pinButton, jumpButton,
-      mobile, collapsed: false, active: true };
+      formulaButton, formulaExpanded: false, mobile, collapsed: false, active: true };
     this.cards.add(card); this.transient = card;
+    formulaButton.addEventListener('click', () => {
+      card.formulaExpanded = !card.formulaExpanded;
+      void this.render(card);
+    }, { signal });
     contextButton.addEventListener('click', () => {
       card.contextOpen = !card.contextOpen;
       contextButton.textContent = card.contextOpen ? '收起上下文' : '展开上下文';
@@ -294,12 +303,13 @@ export class PreviewManager {
     const index = await this.host.getIndex(card.path);
     if (!this.cards.has(card)) return;
     const candidates = this.host.navigationTargets(index, card.key);
-    const signature = JSON.stringify([card.path, candidates.map(t => [t.from, t.markdown, t.caption, t.heading]), card.contextOpen ? index?.source : '']);
+    const signature = JSON.stringify([card.path, candidates.map(t => [t.from, t.markdown, t.caption, t.heading]), card.contextOpen ? index?.source : '', card.formulaExpanded]);
     if (signature === card.contentSignature) return;
     card.contentSignature = signature;
     const revision = ++card.revision;
     card.component.unload(); card.component = new Component(); card.component.load();
     card.body.empty(); card.context.empty(); card.context.hidden = true;
+    card.formulaButton.hidden = true;
     card.target = undefined;
     card.jumpButton.disabled = true;
     if (!candidates.length) {
@@ -330,11 +340,27 @@ export class PreviewManager {
     card.locationEl.textContent = card.heading ? card.path.replace(/\.md$/, '') : `${target.heading}${(target.tagCount ?? 0) > 1 ? ' · 完整公式组' : ''}`;
     try {
       if (target.math !== undefined) {
+        const focused = focusMath(target.math, target.label);
+        card.formulaButton.hidden = !focused;
+        card.formulaButton.textContent = card.formulaExpanded ? '聚焦引用' : '展开完整公式组';
+        card.formulaButton.setAttribute('aria-expanded', String(card.formulaExpanded));
+        if (focused && !card.formulaExpanded) card.locationEl.textContent = `${target.heading} · 公式节选`;
         await loadMathJax();
         if (revision !== card.revision || !this.cards.has(card)) return;
-        card.body.appendChild(renderMath(target.math, true));
+        const math = focused && !card.formulaExpanded ? focused.math : target.math;
+        card.body.appendChild(renderMath(math, true));
         await finishRenderMath();
         if (revision !== card.revision || !this.cards.has(card)) return;
+        // A custom macro can have effects the conservative row reader cannot
+        // predict. Always recover the original formula if its excerpt fails.
+        if (math !== target.math && card.body.querySelector('mjx-merror, [data-mjx-error]')) {
+          card.body.empty(); card.body.appendChild(renderMath(target.math, true));
+          card.formulaButton.hidden = true;
+          card.locationEl.textContent = `${target.heading} · 完整公式组`;
+          await finishRenderMath();
+          if (revision !== card.revision || !this.cards.has(card)) return;
+        }
+        card.body.scrollTop = 0; card.body.scrollLeft = 0;
         if ((target.tagCount ?? 0) > 1) highlightMathRow(card.body, target as Target);
       } else {
         await MarkdownRenderer.render(this.host.app, target.markdown, card.body, card.path, card.component);
@@ -418,17 +444,27 @@ export class PreviewManager {
 
 export function highlightMathRow(container: HTMLElement, target: Target): void {
   const normal = (text: string | null) => (text ?? '').replace(/[()（）\s]/g, '');
-  const labelCells = [...container.querySelectorAll<HTMLElement>('mjx-labels mjx-mtd, .mjx-label mjx-mtd, mjx-mlabeledtr > mjx-mtd:first-child')];
+  const labelCells = [...container.querySelectorAll<HTMLElement>('mjx-labels mjx-mtd, .mjx-label mjx-mtd')];
+  // Older renderers can leave the label inside the body row. In CHTML the
+  // first body cell is actual math, so do not mistake it for a tag.
+  labelCells.push(...[...container.querySelectorAll<HTMLElement>('mjx-mlabeledtr > mjx-mtd:first-child')]
+    .filter(cell => !cell.closest('mjx-mtable')?.querySelector(':scope > mjx-labels, :scope > .mjx-label')));
   const label = labelCells.find(el => normal(mathText(el)) === target.label);
   if (label) {
     label.classList.add('reflo-math-focus');
-    const labelRow = label.closest('mjx-mtr');
-    const labelTable = labelRow?.parentElement;
-    const rowIndex = labelRow && labelTable ? [...labelTable.children].indexOf(labelRow) : -1;
     const mathTable = label.closest('mjx-mtable');
-    const rows = mathTable?.querySelectorAll(':scope > mjx-table > mjx-itable > mjx-mtr, :scope > mjx-table > mjx-itable > mjx-mlabeledtr');
-    if (rowIndex >= 0) rows?.[rowIndex]?.classList.add('reflo-math-focus');
-    label.closest('mjx-mlabeledtr')?.classList.add('reflo-math-focus');
+    const inlineRow = label.parentElement;
+    if (inlineRow?.tagName.toLowerCase() === 'mjx-mlabeledtr') {
+      inlineRow.classList.add('reflo-math-focus');
+    } else if (mathTable) {
+      // CHTML combines consecutive unnumbered rows into one label spacer.
+      // Pair actual label cells only with direct labeled body rows in this table.
+      const labels = [...mathTable.querySelectorAll<HTMLElement>('mjx-labels mjx-mtd, .mjx-label mjx-mtd')]
+        .filter(cell => cell.closest('mjx-mtable') === mathTable && normal(mathText(cell)) !== '');
+      const rows = [...mathTable.querySelectorAll<HTMLElement>(':scope > mjx-table > mjx-itable > mjx-mlabeledtr')];
+      const position = labels.indexOf(label);
+      if (position >= 0 && labels.length === rows.length) rows[position].classList.add('reflo-math-focus');
+    }
     return;
   }
   // MathJax versions use different table markup. At minimum emphasize the exact rendered tag.

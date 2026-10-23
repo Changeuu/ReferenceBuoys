@@ -7,6 +7,7 @@ import { ReferenceSuggest } from '../../src/suggest';
 import { renderConversionSettings } from '../../src/ui/conversion-settings';
 import { indexDocument } from '../../src/core/parser';
 import { ReferenceSettingsTab } from '../../src/settings';
+import { highlightMathRow, mathText } from '../../src/ui/previews';
 
 async function boot() {
   await window.MathJax.startup.promise;
@@ -81,7 +82,7 @@ async function boot() {
   };
   const suggest = new ReferenceSuggest(plugin);
   window.lab = { plugin, cm, view, source, file, suggest, EditorView, EditorSelection,
-    renderMath, finishRenderMath, app, files, leaf, leaves, emit,
+    renderMath, finishRenderMath, highlightMathRow, mathText, app, files, leaf, leaves, emit,
     addPane: (path: string) => {
       const otherView = new MarkdownView(); otherView.file = files.get(path)!.file;
       otherView.contentEl = document.body.createDiv({ cls: 'test-other-pane' });

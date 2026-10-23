@@ -10,7 +10,7 @@ Existing heading links such as `[[#Energy]]` and `[[Mechanics#Energy]]` also sup
 
 Built for **Live Preview**, with manual numbering and support for sublabels such as `1.13a` and `1.13b`.
 
-**Version 0.1.7 · Early release · Windows + Android (experimental) · Obsidian 1.8.0 or later**
+**Version 0.1.8 · Early release · Windows + Android (experimental) · Obsidian 1.8.0 or later**
 
 The plugin interface and bundled example notes currently use Simplified Chinese. This guide includes the Chinese names of commands and controls so you can find them.
 
@@ -92,7 +92,9 @@ Substitute @{1.13a} into @{1.13b}.
 References render as `（式 1.13a）` and `（式 1.13b）`, where `式` means “equation.” Labels such as `1.13a`, `1.13b`, and `A.1` are matched in full and are case-sensitive.
 
 - **You control the numbering.** The plugin does not number or renumber formulas, or require extra IDs such as `eq:xxxx`.
-- If a formula block contains multiple `\tag` commands, the preview shows the whole block and highlights the referenced row.
+- If a formula block contains multiple `\tag` commands, the preview highlights the referenced row, including when unnumbered lines separate the tags.
+- Long `align` / `align*` chains (five or more rows) open as a focused excerpt: the original first row preserves the left-hand expression, followed by the referenced row and its preceding unnumbered steps. Omitted lines are marked explicitly. Trailing continuation lines are retained for the last tag.
+- Use **展开完整公式组** (Expand full formula group) and **聚焦引用** (Focus reference) to switch views. Short groups, independent equations and structures that cannot be shortened safely stay complete. Nested `cases` or `aligned` content is kept intact. Try `多编号递等式体验.md` in the example folder.
 - Formulas use Obsidian's MathJax renderer and must use LaTeX syntax supported by MathJax.
 - If you change a label, update its references too. Unresolved references have a dashed underline.
 
@@ -344,7 +346,7 @@ Adjust whether context is expanded by default, autocomplete, and conversion temp
 
 The current release targets **Windows desktop and Android (experimental), especially Live Preview**. Numbered references stay within a note; heading wikilinks also work across notes. Automatic numbering is not supported. iOS has not been tested.
 
-Automated tests cover parsing, context extraction, position tracking, heading section boundaries, cross-note return stacks, selected-reference conversion, template generation, definition/theorem target creation, formula overflow, CodeMirror widgets, and browser interactions. Earlier versions have been tried manually in Obsidian on Windows. The 0.1.7 conversion fix and Android support still need testing in Obsidian. Browser component tests use a simplified Obsidian API stub with real CodeMirror and MathJax, so they do not replace app testing.
+Automated tests cover parsing, context extraction, position tracking, heading section boundaries, cross-note return stacks, selected-reference conversion, template generation, definition/theorem target creation, formula overflow, multi-tag row highlighting, focused equation previews, CodeMirror widgets, and browser interactions. Earlier versions have been tried manually in Obsidian on Windows. The 0.1.8 preview changes and Android support still need testing in Obsidian. Browser component tests use a simplified Obsidian API stub with real CodeMirror and MathJax, so they do not replace app testing.
 
 Suggested checks when trying the plugin:
 
@@ -358,6 +360,13 @@ Suggested checks when trying the plugin:
 To [report an issue](https://github.com/Changeuu/ReferenceBuoys/issues), include your Obsidian version, theme, a minimal example note, and the steps that trigger the problem. Use sample content that you are comfortable sharing.
 
 ## Changelog
+
+### 0.1.8
+
+- Fix formula-body highlighting when MathJax combines several unnumbered lines into one label-column spacer.
+- Focus long `align` chains on the referenced segment while retaining the original first row and marking omitted steps.
+- Add full-group expansion and refocusing on desktop and mobile; keep unsupported structures complete.
+- Add regression coverage for the reported six-row derivation, nested formulas, preview updates and mobile restoration.
 
 ### 0.1.7
 

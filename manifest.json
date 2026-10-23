@@ -1,7 +1,7 @@
 {
   "id": "reference-buoys",
   "name": "引用浮标 · Reference Buoys",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "minAppVersion": "1.8.0",
   "description": "预览公式、图表和章节引用，固定对照，并通过可堆叠浮标返回阅读位置。",
   "author": "Changeuu",
