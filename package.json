@@ -1,6 +1,6 @@
 {
   "name": "obsidian-reference-buoys",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "private": true,
   "description": "在 Obsidian 中预览公式、图表和章节引用，并用临时浮标返回阅读位置。",
   "type": "module",

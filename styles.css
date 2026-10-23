@@ -115,7 +115,7 @@
 .reflo-suggestion-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .reflo-suggestion-top strong { font-size: 13px; }
 .reflo-suggestion-top span { max-width: 180px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; font-size: 11px; }
-.reflo-suggestion-math { max-height: 90px; overflow: hidden; font-size: .8em; margin-top: 7px; }
+.reflo-suggestion-math { min-height: 28px; max-height: 90px; overflow: hidden; font-size: .8em; margin-top: 7px; }
 .reflo-suggestion-math mjx-container { margin: 0 !important; }
 .reflo-suggestion-caption { font-size: 11px; color: var(--text-muted); margin-top: 5px; }
 .reflo-settings-syntax { margin-top: 25px; background: var(--background-secondary); border-radius: 8px; padding: 16px; }

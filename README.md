@@ -10,7 +10,7 @@ Existing heading links such as `[[#Energy]]` and `[[Mechanics#Energy]]` also sup
 
 Built for **Live Preview**, with manual numbering and support for sublabels such as `1.13a` and `1.13b`.
 
-**Version 0.1.8 · Early release · Windows + Android (experimental) · Obsidian 1.8.0 or later**
+**Version 0.1.9 · Early release · Windows + Android (experimental) · Obsidian 1.8.0 or later**
 
 The plugin interface and bundled example notes currently use Simplified Chinese. This guide includes the Chinese names of commands and controls so you can find them.
 
@@ -311,6 +311,8 @@ The ZIP includes `选中转换练习.md` for practicing conversion.
 
 A useful mouse macro is: **type `@{}` → press Left Arrow**. Then enter the label. Autocomplete suggests references in the current note, with formula previews and section names.
 
+Labels can mix numbers, dots and letters: typing `@{1.}` also finds `1.1.b`, `1.1.52c` and `1.1.Gauss`. Exact label and prefix matches appear before matches in formula content, with natural numeric ordering. All matches remain available by scrolling. Search ignores case, while choosing a candidate preserves its original label and case. Formula thumbnails load as candidates become visible.
+
 For figures, tables, and other content, use `@fig{}`, `@tab{}`, or `@add{}` followed by Left Arrow. Suggestions are filtered by type. Label definitions use `@#fig{}`, `@#tab{}`, and `@#add{}`.
 
 To edit a rendered reference:
@@ -346,7 +348,7 @@ Adjust whether context is expanded by default, autocomplete, and conversion temp
 
 The current release targets **Windows desktop and Android (experimental), especially Live Preview**. Numbered references stay within a note; heading wikilinks also work across notes. Automatic numbering is not supported. iOS has not been tested.
 
-Automated tests cover parsing, context extraction, position tracking, heading section boundaries, cross-note return stacks, selected-reference conversion, template generation, definition/theorem target creation, formula overflow, multi-tag row highlighting, focused equation previews, CodeMirror widgets, and browser interactions. Earlier versions have been tried manually in Obsidian on Windows. The 0.1.8 preview changes and Android support still need testing in Obsidian. Browser component tests use a simplified Obsidian API stub with real CodeMirror and MathJax, so they do not replace app testing.
+Automated tests cover parsing, context extraction, position tracking, heading section boundaries, cross-note return stacks, selected-reference conversion, template generation, definition/theorem target creation, formula overflow, multi-tag row highlighting, focused equation previews, CodeMirror widgets, and browser interactions. Earlier versions have been tried manually in Obsidian on Windows. The 0.1.9 autocomplete changes and Android support still need testing in Obsidian. Browser component tests use a simplified Obsidian API stub with real CodeMirror and MathJax, so they do not replace app testing.
 
 Suggested checks when trying the plugin:
 
@@ -360,6 +362,13 @@ Suggested checks when trying the plugin:
 To [report an issue](https://github.com/Changeuu/ReferenceBuoys/issues), include your Obsidian version, theme, a minimal example note, and the steps that trigger the problem. Use sample content that you are comfortable sharing.
 
 ## Changelog
+
+### 0.1.9
+
+- Remove the 12-item autocomplete cutoff that hid later labels, including letter and named sublabels.
+- Prioritize exact labels and prefixes, then sort labels naturally; preserve the chosen label's case.
+- Render candidate formula thumbnails as they become visible so long result lists remain usable.
+- Add regression coverage for mixed labels, more than 100 matches, completion insertion and renderer cleanup.
 
 ### 0.1.8
 
