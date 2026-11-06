@@ -9,6 +9,24 @@ import { indexDocument } from '../../src/core/parser';
 import { ReferenceSettingsTab } from '../../src/settings';
 import { highlightMathRow, mathText } from '../../src/ui/previews';
 
+// Both conventional and fragmented spans represent native Live Preview output.
+const nativeHeadingLinks = ViewPlugin.fromClass(class {
+  decorations: any;
+  constructor(v: EditorView) { this.decorations = this.build(v); }
+  update(u: any) { if (u.docChanged || u.selectionSet) this.decorations = this.build(u.view); }
+  build(v: EditorView) {
+    const fragmented = new URLSearchParams(location.search).has('fragmented');
+    return Decoration.set(indexDocument(v.state.doc.toString()).headingLinks.flatMap(r => {
+      const text = v.state.doc.sliceString(r.from, r.to), pipe = text.indexOf('|');
+      if (!fragmented) return [Decoration.mark({ class: 'cm-hmd-internal-link' }).range(r.from + (pipe >= 0 ? pipe + 1 : 2), r.to - 2)];
+      if (pipe >= 0) return [Decoration.mark({ class: 'cm-link-alias' }).range(r.from + pipe + 1, r.to - 2)];
+      const hash = r.from + text.indexOf('#');
+      return [...(hash > r.from + 2 ? [Decoration.mark({ class: 'cm-hmd-internal-link' }).range(r.from + 2, hash)] : []),
+        Decoration.mark({ class: 'cm-underline' }).range(hash + 1, r.to - 2)];
+    }), true);
+  }
+}, { decorations: v => v.decorations });
+
 async function boot() {
   await window.MathJax.startup.promise;
   (window as any).notices = [];
@@ -20,14 +38,14 @@ async function boot() {
   const events = new Map<string, Array<(...args: any[]) => void>>();
   const on = (name: string, fn: (...args: any[]) => void) => { events.set(name, [...events.get(name) ?? [], fn]); };
   const emit = (name: string, ...args: any[]) => { for (const fn of events.get(name) ?? []) fn(...args); };
-  const leaf = { view, openFile: async (next: TFile) => {
+  const leaf: any = { view, tab: true, openFile: async (next: TFile) => {
     if (view.file) files.get(view.file.path)!.source = cm.state.doc.toString();
     view.file = next;
     cm.dispatch({ changes: { from: 0, to: cm.state.doc.length, insert: files.get(next.path)!.source }, selection: { anchor: 0 } });
     cm.scrollDOM.scrollTop = 0;
     plugin.refreshPanels();
   } }; view.leaf = leaf;
-  const leaves = [leaf];
+  const leaves: any[] = [leaf];
   let activeLeaf = leaf;
   const app: any = {
     vault: { on, getAbstractFileByPath: (path: string) => files.get(path)?.file,
@@ -38,8 +56,27 @@ async function boot() {
       return files.get(local)?.file ?? files.get(target)?.file ?? [...files.values()].find(f => f.file.path.endsWith('/' + target))?.file;
     } },
     workspace: { on, getLeavesOfType: () => leaves, getActiveViewOfType: () => activeLeaf.view,
-      getActiveFile: () => activeLeaf.view.file, setActiveLeaf: (value: any) => { activeLeaf = value; emit('active-leaf-change'); },
-      getLeaf: () => activeLeaf, onLayoutReady: (fn: any) => setTimeout(fn, 0) }
+      getActiveFile: () => activeLeaf.view.file, setActiveLeaf: (value: any) => {
+        activeLeaf = value;
+        if (value.tab) for (const candidate of leaves) if (candidate.tab && candidate.view.contentEl) candidate.view.contentEl.hidden = candidate !== value;
+        emit('active-leaf-change');
+      },
+      getLeaf: (mode?: string | boolean) => {
+        if (mode !== 'tab' && mode !== true) return activeLeaf;
+        const created: any = { tab: true, view: { getViewType: () => 'empty' },
+          detach: () => { const at = leaves.indexOf(created); if (at >= 0) leaves.splice(at, 1); created.view.contentEl?.remove(); plugin.refreshPanels(); },
+          openFile: async (next: TFile, state: any) => {
+            const pane = window.lab.addPane(next.path);
+            leaves.splice(leaves.indexOf(pane.leaf), 1);
+            created.view = pane.view; pane.view.leaf = created;
+            created.openFile = pane.leaf.openFile;
+            created.openState = state;
+            created.view.contentEl.hidden = true;
+            if (state?.eState) created.view.setEphemeralState(state.eState);
+            plugin.refreshPanels();
+          } };
+        leaves.push(created); return created;
+      }, onLayoutReady: (fn: any) => setTimeout(fn, 0) }
   };
   const plugin = new ReferenceBuoysPlugin(app, { id: 'reference-buoys' } as any);
   await plugin.onload();
@@ -49,18 +86,7 @@ async function boot() {
     editorInfoField, editorLivePreviewField,
     EditorState.allowMultipleSelections.of(true), readOnly.of(EditorState.readOnly.of(false)),
     ...plugin.extensions,
-    // Representative native CM link spans: plugin code must not replace them.
-    ViewPlugin.fromClass(class {
-      decorations: any;
-      constructor(v: EditorView) { this.decorations = this.build(v); }
-      update(u: any) { if (u.docChanged || u.selectionSet) this.decorations = this.build(u.view); }
-      build(v: EditorView) {
-        return Decoration.set(indexDocument(v.state.doc.toString()).headingLinks.map(r => {
-          const text = v.state.doc.sliceString(r.from, r.to), pipe = text.indexOf('|');
-          return Decoration.mark({ class: 'cm-hmd-internal-link' }).range(r.from + (pipe >= 0 ? pipe + 1 : 2), r.to - 2);
-        }), true);
-      }
-    }, { decorations: v => v.decorations }),
+    nativeHeadingLinks,
     history(),
     keymap.of([{ key: 'Ctrl-Alt-r', run: () => { plugin.converter.convertEditor(view.editor); return true; } },
       // Test-only binding simulates a user assigning the new command in Obsidian.
@@ -89,7 +115,7 @@ async function boot() {
       Object.assign(otherView.contentEl.style, { height: '500px', width: '600px', position: 'relative' });
       (window as any).__info = otherView;
       const otherCM = new EditorView({ parent: otherView.contentEl, state: EditorState.create({ doc: path === view.file.path ? cm.state.doc.toString() : files.get(path)!.source,
-        extensions: [editorInfoField, editorLivePreviewField, ...plugin.extensions, EditorView.theme({ '&': { height: '100%' }, '.cm-scroller': { overflow: 'auto' } })] }) });
+        extensions: [editorInfoField, editorLivePreviewField, ...plugin.extensions, nativeHeadingLinks, EditorView.theme({ '&': { height: '100%' }, '.cm-scroller': { overflow: 'auto' } })] }) });
       (window as any).__info = view;
       const otherLeaf: any = { view: otherView, openFile: async (file: TFile) => {
         files.get(otherView.file.path)!.source = otherCM.state.doc.toString(); otherView.file = file;

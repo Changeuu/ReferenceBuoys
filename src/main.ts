@@ -348,9 +348,17 @@ export default class ReferenceBuoysPlugin extends Plugin {
     if (targetPath !== origin.path) {
       const file = this.app.vault.getAbstractFileByPath(targetPath);
       if (!(file instanceof TFile)) { new Notice('目标笔记已不存在。'); return; }
-      await originLeaf.openFile(file);
-      if (this.disposed || !(originLeaf.view instanceof MarkdownView) || originLeaf.view.file?.path !== targetPath) return;
-      view = originLeaf.view;
+      const newTab = target.kind === 'heading';
+      const destinationLeaf = newTab ? this.app.workspace.getLeaf('tab') : originLeaf;
+      try {
+        await destinationLeaf.openFile(file, { active: false, eState: { line: current.line } });
+      } catch (error) {
+        // Clean up only the empty tab created by this jump, never an existing note.
+        if (newTab && destinationLeaf.view.getViewType() === 'empty') destinationLeaf.detach();
+        throw error;
+      }
+      if (this.disposed || !(destinationLeaf.view instanceof MarkdownView) || destinationLeaf.view.file?.path !== targetPath) return;
+      view = destinationLeaf.view;
     }
     points.push(point); this.points.set(origin.path, points);
     this.originLeaves.set(point.id, originLeaf);

@@ -33,27 +33,96 @@ test('native Live Preview heading hover uses section bounds and suppresses a sec
   await page.screenshot({ path: '.qa/heading-preview.png' });
 });
 
-test('A to B to C keeps the full return stack and consumes only the chosen marker', async ({ page }) => {
+test('the reported Chinese cross-note link previews from its heading fragment and jumps from the preview into a new tab', async ({ page }) => {
+  await page.goto('/?fragmented'); await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.evaluate(() => {
+    window.lab.replace(0, window.lab.cm.state.doc.length, '# 电动力学\n\n参见 [[原子物理学#塞曼效应]]。');
+    window.lab.addFile('Physics/Note/原子物理学.md', '# 原子物理学\n## 磁场\n### 塞曼效应\n目标正文\n#### 正常塞曼效应\n子标题正文\n### 下一节\n其他正文');
+  });
+  const heading = page.locator('.cm-underline').filter({ hasText: '塞曼效应' });
+  await heading.hover();
+  const popup = page.locator('.reflo-preview');
+  await expect(popup).toContainText('目标正文'); await expect(popup).toContainText('子标题正文');
+  await expect(popup).not.toContainText('其他正文');
+  await expect(popup.locator('.reflo-preview-body')).toHaveAttribute('data-render-path', 'Physics/Note/原子物理学.md');
+  expect(await page.evaluate(() => window.lab.leaves.length)).toBe(1);
+  await popup.getByRole('button', { name: '跳到原文并留下返回浮标', exact: true }).click();
+  expect(await page.evaluate(() => window.lab.app.workspace.getActiveFile().path)).toBe('Physics/Note/原子物理学.md');
+  expect(await page.evaluate(() => window.lab.view.file.path)).toBe('引用浮标体验.md');
+  expect(await page.evaluate(() => window.lab.leaves.at(-1).openState)).toEqual({ active: false, eState: { line: 2 } });
+  await page.locator('.reflo-buoy-go:visible').click();
+  expect(await page.evaluate(() => window.lab.app.workspace.getActiveViewOfType() === window.lab.view)).toBe(true);
+  expect(await page.evaluate(() => window.lab.cm.state.doc.toString())).toContain('[[原子物理学#塞曼效应]]');
+});
+
+test('fragmented aliases and headings at every level resolve without requiring a level in the link', async ({ page }) => {
+  await page.goto('/?fragmented'); await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.evaluate(() => {
+    window.lab.replace(0, window.lab.cm.state.doc.length, '# 来源\n\n' + Array.from({ length: 6 }, (_, i) => `[[原子物理学#标题${i + 1}|级别${i + 1}]]`).join(' '));
+    window.lab.addFile('原子物理学.md', Array.from({ length: 6 }, (_, i) => `${'#'.repeat(i + 1)} 标题${i + 1}\n正文${i + 1}`).join('\n'));
+  });
+  for (let level = 1; level <= 6; level++) {
+    await page.locator('.cm-link-alias').filter({ hasText: `级别${level}` }).hover();
+    await expect(page.locator('.reflo-preview-identity strong')).toHaveText(`标题${level}`);
+    await expect(page.locator('.reflo-preview-body')).toContainText(`正文${level}`);
+  }
+  await page.locator('.cm-link-alias').filter({ hasText: '级别6' }).click();
+  expect(await page.evaluate(() => window.lab.app.workspace.getActiveFile().path)).toBe('原子物理学.md');
+  expect(await page.evaluate(() => window.lab.leaves.length)).toBe(2);
+});
+
+test('Reading view canonical and encoded hrefs match a short source link and retain source offsets', async ({ page }) => {
+  await page.evaluate(async () => {
+    window.lab.replace(0, window.lab.cm.state.doc.length, '# 来源\n\n[[原子物理学#塞曼效应|查看]]\n\n[[原子物理学#塞曼效应|再看]]');
+    window.lab.addFile('Physics/Note/原子物理学.md', '# 原子物理学\n### 塞曼效应\n跨笔记正文');
+    await window.lab.readingLink('Physics/Note/原子物理学.md#塞曼效应', 2);
+    await window.lab.readingLink(encodeURI('Physics/Note/原子物理学.md#塞曼效应'), 4);
+    window.lab.view.getMode = () => 'preview';
+  });
+  for (const anchor of await page.locator('.test-reading .internal-link').all()) {
+    await anchor.hover();
+    await expect(page.locator('.reflo-preview')).toContainText('跨笔记正文');
+  }
+  await page.locator('.test-reading .internal-link').last().click();
+  expect(await page.evaluate(() => window.lab.app.workspace.getActiveFile().path)).toBe('Physics/Note/原子物理学.md');
+  expect(await page.evaluate(() => window.lab.plugin.returnPoints()[0].from)).toBe(await page.evaluate(() => window.lab.cm.state.doc.toString().lastIndexOf('[[')));
+});
+
+test('an explicit link to the same note stays in its tab and preserves unrelated tabs', async ({ page }) => {
+  await page.evaluate(() => {
+    window.lab.replace(0, 0, '[[引用浮标体验#Local|同篇]]\n\n');
+    window.lab.addPane('B.md');
+  });
+  await page.locator('.cm-hmd-internal-link').filter({ hasText: '同篇' }).click();
+  expect(await page.evaluate(() => window.lab.app.workspace.getActiveViewOfType() === window.lab.view)).toBe(true);
+  expect(await page.evaluate(() => window.lab.leaves.map((leaf: any) => leaf.view.file.path))).toEqual(['引用浮标体验.md', 'B.md']);
+});
+
+test('A to B to C opens new tabs and returns to the original tabs without replacing them', async ({ page }) => {
+  const original = await page.evaluate(() => ({ source: window.lab.cm.state.doc.toString(), cursor: window.lab.cm.state.selection.main.head, scroll: window.lab.cm.scrollDOM.scrollTop }));
   await page.locator('.cm-hmd-internal-link').filter({ hasText: '能量章节' }).click();
-  expect(await page.evaluate(() => window.lab.view.file.path)).toBe('B.md');
-  await expect(page.locator('.reflo-buoy')).toHaveCount(1);
-  await expect(page.locator('.reflo-buoy-go')).toContainText('引用浮标体验');
-  await page.locator('.cm-hmd-internal-link').filter({ hasText: '继续到 C' }).click();
-  expect(await page.evaluate(() => window.lab.view.file.path)).toBe('C.md');
-  await expect(page.locator('.reflo-buoy')).toHaveCount(2);
+  expect(await page.evaluate(() => window.lab.app.workspace.getActiveFile().path)).toBe('B.md');
+  expect(await page.evaluate(() => window.lab.view.file.path)).toBe('引用浮标体验.md');
+  expect(await page.evaluate(() => ({ source: window.lab.cm.state.doc.toString(), cursor: window.lab.cm.state.selection.main.head, scroll: window.lab.cm.scrollDOM.scrollTop }))).toEqual(original);
+  await expect(page.locator('.reflo-buoy:visible')).toHaveCount(1);
+  await expect(page.locator('.reflo-buoy-go:visible')).toContainText('引用浮标体验');
+  await page.locator('.cm-hmd-internal-link:visible').filter({ hasText: '继续到 C' }).click();
+  expect(await page.evaluate(() => window.lab.app.workspace.getActiveFile().path)).toBe('C.md');
+  expect(await page.evaluate(() => window.lab.leaves.map((leaf: any) => leaf.view.file.path))).toEqual(['引用浮标体验.md', 'B.md', 'C.md']);
+  await expect(page.locator('.reflo-buoy:visible')).toHaveCount(2);
   await page.screenshot({ path: '.qa/heading-return-stack.png' });
-  await page.locator('.reflo-buoy-go').first().click();
-  expect(await page.evaluate(() => window.lab.view.file.path)).toBe('B.md');
-  await expect(page.locator('.reflo-buoy')).toHaveCount(1);
+  await page.locator('.reflo-buoy-go:visible').first().click();
+  expect(await page.evaluate(() => window.lab.app.workspace.getActiveFile().path)).toBe('B.md');
+  await expect(page.locator('.reflo-buoy:visible')).toHaveCount(1);
   await page.evaluate(() => window.lab.plugin.commands.find((c: any) => c.id === 'return-to-buoy').checkCallback(false));
-  await expect.poll(() => page.evaluate(() => window.lab.view.file.path)).toBe('引用浮标体验.md');
-  await expect(page.locator('.reflo-buoys')).toBeHidden();
+  await expect.poll(() => page.evaluate(() => window.lab.app.workspace.getActiveFile().path)).toBe('引用浮标体验.md');
+  await expect(page.locator('.reflo-buoys:visible')).toHaveCount(0);
   expect(await page.evaluate(() => window.lab.cm.state.doc.toString())).toContain('[[B#Energy|能量章节]]');
 });
 
 test('cross-note return restores a distant viewport and follows edits while away', async ({ page }) => {
   const result = await page.evaluate(async () => {
-    const { plugin, cm, view, EditorView, files, emit } = window.lab;
+    const { plugin, cm, view, EditorView } = window.lab;
     const offset = cm.state.doc.length;
     window.lab.replace(offset, offset, '\n\n[[B#Energy]]\n');
     cm.dispatch({ selection: { anchor: offset }, effects: EditorView.scrollIntoView(offset, { y: 'center' }) });
@@ -62,8 +131,8 @@ test('cross-note return restores a distant viewport and follows edits while away
     const ref = (await window.lab.index()).headingLinks.at(-1);
     await plugin.followHeading(cm.dom, ref, { path: view.file.path, from: ref.from, to: ref.to, cm });
     const point = plugin.returnPoints()[0], old = point.from;
-    const record = files.get(point.path); record.source = '插入内容\n\n' + record.source;
-    emit('modify', record.file);
+    // The original editor is still open in its own tab and can receive edits.
+    window.lab.replace(0, 0, '插入内容\n\n');
     await new Promise(r => setTimeout(r, 100));
     const mapped = point.from - old;
     await plugin.returnTo(point, view);
@@ -115,7 +184,8 @@ test('Reading view aliases resolve from section offsets and support keyboard nav
   await page.locator('.test-reading .internal-link').focus();
   await expect(page.locator('.reflo-preview')).toContainText('Energy body');
   await page.locator('.test-reading .internal-link').press('Enter');
-  expect(await page.evaluate(() => window.lab.view.file.path)).toBe('B.md');
+  expect(await page.evaluate(() => window.lab.app.workspace.getActiveFile().path)).toBe('B.md');
+  expect(await page.evaluate(() => window.lab.view.file.path)).toBe('引用浮标体验.md');
   expect(await page.evaluate(() => window.lab.plugin.returnPoints()[0].from)).toBe(13);
   // Focusing the link may scroll it into view; the point uses the Reading scroller, not hidden CM.
   expect(await page.evaluate(() => window.lab.plugin.returnPoints()[0].viewportFrom)).toBe(13);
@@ -159,10 +229,17 @@ test('renaming a destination refreshes pinned previews; deletion disables jumpin
 });
 
 test('failed cross-file opens preserve return markers and never create a failed-jump marker', async ({ page }) => {
-  await page.evaluate(() => { window.lab.leaf.openFile = async () => { throw new Error('test open failure'); }; });
+  await page.evaluate(() => {
+    const workspace = window.lab.app.workspace, getLeaf = workspace.getLeaf;
+    workspace.getLeaf = (mode: any) => {
+      const leaf = getLeaf(mode); leaf.openFile = async () => { throw new Error('test open failure'); }; return leaf;
+    };
+  });
   await page.locator('.cm-hmd-internal-link').filter({ hasText: '能量章节' }).click();
   await expect.poll(() => page.evaluate(() => (window as any).notices)).toContain('无法打开目标笔记，请重试。');
   expect(await page.evaluate(() => window.lab.plugin.returnPoints().length)).toBe(0);
+  expect(await page.evaluate(() => window.lab.leaves.length)).toBe(1);
+  expect(await page.evaluate(() => window.lab.view.file.path)).toBe('引用浮标体验.md');
 });
 
 test('mobile native heading links reuse the collapsible panel and compact cross-note returns', async ({ page }) => {
@@ -175,11 +252,12 @@ test('mobile native heading links reuse the collapsible panel and compact cross-
   await expect(popup).toBeHidden();
   await page.locator('.reflo-mobile-preview-tab').click();
   await popup.getByRole('button', { name: '跳到原文并留下返回浮标', exact: true }).click();
-  expect(await page.evaluate(() => window.lab.view.file.path)).toBe('B.md');
-  await expect(page.locator('.reflo-mobile-buoy')).toHaveText('↩ 1');
+  expect(await page.evaluate(() => window.lab.app.workspace.getActiveFile().path)).toBe('B.md');
+  expect(await page.evaluate(() => window.lab.view.file.path)).toBe('引用浮标体验.md');
+  await expect(page.locator('.reflo-mobile-buoy:visible')).toHaveText('↩ 1');
   await expect(page.locator('.reflo-mobile-preview-tab')).toBeVisible();
   await page.screenshot({ path: '.qa/heading-mobile.png' });
-  await page.locator('.reflo-mobile-buoy').click();
-  expect(await page.evaluate(() => window.lab.view.file.path)).toBe('引用浮标体验.md');
+  await page.locator('.reflo-mobile-buoy:visible').click();
+  expect(await page.evaluate(() => window.lab.app.workspace.getActiveFile().path)).toBe('引用浮标体验.md');
   await expect(page.locator('.reflo-mobile-buoy')).toHaveCount(0);
 });

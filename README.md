@@ -10,7 +10,7 @@ Existing heading links such as `[[#Energy]]` and `[[Mechanics#Energy]]` also sup
 
 Built for **Live Preview**, with manual numbering and support for sublabels such as `1.13a` and `1.13b`.
 
-**Version 0.1.9 · Early release · Windows + Android (experimental) · Obsidian 1.8.0 or later**
+**Version 0.1.10 · Early release · Windows + Android (experimental) · Obsidian 1.8.0 or later**
 
 The plugin interface and bundled example notes currently use Simplified Chinese. This guide includes the Chinese names of commands and controls so you can find them.
 
@@ -62,6 +62,10 @@ Keep your existing Obsidian wikilinks:
 ```
 
 In **Live Preview** and **Reading view**, hover to preview a section, or click to jump and leave a return marker. On mobile, tap to preview, then use **跳转** (Jump) in the panel. The preview includes the heading and its subsections, ending before the next heading at the same or a higher level. Long sections scroll inside the preview; images and embedded content resolve relative to the target note.
+
+Cross-note jumps open the destination heading in a **new tab**, keeping the original note, cursor and reading position. This also applies to the preview's jump button. Same-note links stay in the current tab. Returning through a marker activates the original tab; destination tabs remain open.
+
+Use one `#` between the note name and heading, regardless of heading level. For example, `[[Atomic Physics#Zeeman effect]]` can refer to a `### Zeeman effect` heading. No conversion or extra marker is needed. Keep the caret outside the link when hovering or clicking; placing it inside the link edits its source.
 
 - Existing link text, aliases, and Markdown remain unchanged. No conversion or additional labels are needed.
 - The default-on **章节链接预览与返回** (Heading link previews and returns) switch controls this feature separately.
@@ -348,7 +352,7 @@ Adjust whether context is expanded by default, autocomplete, and conversion temp
 
 The current release targets **Windows desktop and Android (experimental), especially Live Preview**. Numbered references stay within a note; heading wikilinks also work across notes. Automatic numbering is not supported. iOS has not been tested.
 
-Automated tests cover parsing, context extraction, position tracking, heading section boundaries, cross-note return stacks, selected-reference conversion, template generation, definition/theorem target creation, formula overflow, multi-tag row highlighting, focused equation previews, CodeMirror widgets, and browser interactions. Earlier versions have been tried manually in Obsidian on Windows. The 0.1.9 autocomplete changes and Android support still need testing in Obsidian. Browser component tests use a simplified Obsidian API stub with real CodeMirror and MathJax, so they do not replace app testing.
+Automated tests cover parsing, context extraction, position tracking, heading section boundaries, cross-note return stacks, selected-reference conversion, template generation, definition/theorem target creation, formula overflow, multi-tag row highlighting, focused equation previews, CodeMirror widgets, and browser interactions. Earlier versions have been tried manually in Obsidian on Windows. The 0.1.10 cross-note navigation changes and Android support still need testing in Obsidian. Browser component tests use a simplified Obsidian API stub with real CodeMirror and MathJax, so they do not replace app testing.
 
 Suggested checks when trying the plugin:
 
@@ -362,6 +366,13 @@ Suggested checks when trying the plugin:
 To [report an issue](https://github.com/Changeuu/ReferenceBuoys/issues), include your Obsidian version, theme, a minimal example note, and the steps that trigger the problem. Use sample content that you are comfortable sharing.
 
 ## Changelog
+
+### 0.1.10
+
+- Open cross-note heading jumps in new tabs while preserving the source tab and its reading position, including jumps from previews and mobile panels.
+- Recognize heading fragments and aliases across different Live Preview link spans.
+- Match Reading view links after Obsidian expands their paths, appends `.md`, or encodes their hrefs.
+- Test Chinese cross-note links, heading levels 1–6, tab preservation, stacked returns and failed-open cleanup.
 
 ### 0.1.9
 

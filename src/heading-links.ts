@@ -72,8 +72,17 @@ export class HeadingLinks {
       if (anchor.closest('.internal-embed')) continue;
       const href = anchor.getAttribute('data-href') ?? anchor.getAttribute('href');
       if (!href) continue;
-      const parsed = parseHeadingLink(`[[${href}]]`); if (!parsed) continue;
-      const ref = index.headingLinks.find(r => r.from >= from && r.key === parsed.key && r.linkpath === parsed.linkpath);
+      // Reading view can expand a short wikilink to a vault-relative path,
+      // append .md, or URI-encode its href. Match the destination, not spelling.
+      const variants = [href];
+      try { const decoded = decodeURIComponent(href); if (decoded !== href) variants.push(decoded); } catch { /* Literal percent signs are valid filenames. */ }
+      const parsed = variants.map(value => parseHeadingLink(`[[${value}]]`)).filter(r => r !== undefined);
+      const ref = index.headingLinks.find(r => r.from >= from && parsed.some(candidate => {
+        if (r.key !== candidate.key) return false;
+        if (r.linkpath === candidate.linkpath) return true;
+        const path = this.host.headingPath(r.linkpath, ctx.sourcePath);
+        return path !== undefined && path === this.host.headingPath(candidate.linkpath, ctx.sourcePath);
+      }));
       if (!ref) continue;
       from = ref.to;
       this.reading.set(anchor, { el: anchor, ref, origin: { path: ctx.sourcePath, from: ref.from, to: ref.to } });
@@ -82,17 +91,24 @@ export class HeadingLinks {
 
   private resolve(view: MarkdownView, event: Event): Link | undefined {
     if (!this.host.settings.headingLinks || !(event.target instanceof Element)) return;
-    const el = event.target.closest<HTMLElement>('a.internal-link, .cm-hmd-internal-link');
-    if (!el || el.closest('.internal-embed, .reflo-preview')) return;
-    if (el.closest('.cm-editor')) {
+    const element = event.target as HTMLElement;
+    if (element.closest('.internal-embed, .reflo-preview')) return;
+    if (element.closest('.cm-editor')) {
       const cm = this.host.cmForView(view), path = view.file?.path;
       if (!cm || !path || !cm.state.field(editorLivePreviewField, false)) return;
+      // Native Live Preview splits note names, heading fragments and aliases
+      // into different spans. Resolve their source position instead of relying
+      // on the filename span's CSS class being present on every part.
+      const el = element.closest<HTMLElement>('a.internal-link, .cm-hmd-internal-link, .cm-link-alias, .cm-underline') ?? element;
+      if (!cm.contentDOM.contains(el) || el === el.closest('.cm-line') || el === cm.contentDOM) return;
       let position: number;
       try { position = cm.posAtDOM(el); } catch { return; }
       const ref = cm.state.field(indexField).headingLinks.find(r => position >= r.from && position < r.to);
       if (!ref || cm.state.selection.ranges.some(s => s.empty ? s.head > ref.from && s.head <= ref.to : s.from < ref.to && s.to > ref.from)) return;
       return { el, ref, origin: { path, from: ref.from, to: ref.to, cm } };
     }
+    const el = element.closest<HTMLElement>('a.internal-link');
+    if (!el) return;
     const link = this.reading.get(el);
     return link && link.origin.path === view.file?.path ? { ...link, origin: { ...link.origin, view } } : undefined;
   }
