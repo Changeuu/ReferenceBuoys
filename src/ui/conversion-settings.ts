@@ -15,7 +15,7 @@ export function renderConversionSettings(parent: HTMLElement, host: ReferenceBuo
     root.empty();
     root.createEl('h3', { text: '选中转换' });
     root.createEl('p', { cls: 'setting-item-description', text: host.isMobile
-      ? '选中一个完整引用，执行“转换选中的引用”。可将此命令添加到 Obsidian 的移动端工具栏。'
+      ? '选中一个完整引用，点选区工具中的“转换引用”。也可执行“转换选中的引用”命令，或将它添加到 Obsidian 移动端工具栏。'
       : '拖选一个完整引用，执行“转换选中的引用”。可在 Obsidian 的快捷键设置中绑定按键，也可以使用右键菜单。' });
     if (!host.isMobile) {
       const dragRow = root.createDiv({ cls: 'reflo-conversion-row' });
@@ -65,6 +65,7 @@ export function renderConversionSettings(parent: HTMLElement, host: ReferenceBuo
       const row = wrap.createDiv({ cls: 'reflo-conversion-row' });
       const kind = select(row, `模板 ${i + 1} 的类型`, Object.entries(kindName), template.kind);
       const pattern = row.createEl('input', { type: 'text', value: template.pattern, attr: { 'aria-label': `模板 ${i + 1}`, placeholder: '例如：方程({n})' } });
+      pattern.setAttribute('autocapitalize', 'off'); pattern.setAttribute('autocorrect', 'off'); pattern.spellcheck = false;
       const remove = row.createEl('button', { text: '移除', attr: { type: 'button', 'aria-label': `移除模板 ${i + 1}` } });
       const error = wrap.createDiv({ cls: 'reflo-conversion-error', attr: { 'aria-live': 'polite' } });
       const validate = () => {
@@ -93,6 +94,9 @@ export function renderConversionSettings(parent: HTMLElement, host: ReferenceBuo
     const generatedKind = select(generatorRow, '生成模板的类型', Object.entries(kindName), 'equation');
     const generate = generatorRow.createEl('button', { text: '生成模板', attr: { type: 'button' } });
     const draft = generator.createEl('input', { type: 'text', attr: { 'aria-label': '生成的模板', placeholder: '生成后可在这里修改' } });
+    for (const input of [example, label, draft]) {
+      input.setAttribute('autocapitalize', 'off'); input.setAttribute('autocorrect', 'off'); input.spellcheck = false;
+    }
     const status = generator.createDiv({ cls: 'reflo-generator-result', attr: { role: 'status', 'aria-live': 'polite' } });
     const accept = generator.createEl('button', { text: '添加到当前模板组', attr: { type: 'button' } });
     accept.disabled = true;

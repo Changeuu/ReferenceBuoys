@@ -10,13 +10,14 @@ export interface Settings {
   bodyMathScroll: boolean;
   headingLinks: boolean;
   suggestions: boolean;
+  mobileSelectionActions: boolean;
   buoySide: 'left' | 'right';
   dragConversion: DragModifier;
   activeConversionProfile: string;
   conversionProfiles: ConversionProfile[];
 }
 export const DEFAULT_SETTINGS: Settings = {
-  hoverDelay: 320, previewWidth: 460, showContext: false, headingLinks: true, bodyMathScroll: true, suggestions: true, buoySide: 'right',
+  hoverDelay: 320, previewWidth: 460, showContext: false, headingLinks: true, bodyMathScroll: true, suggestions: true, mobileSelectionActions: true, buoySide: 'right',
   dragConversion: 'Alt', activeConversionProfile: 'default', conversionProfiles: defaultProfiles()
 };
 export class ReferenceSettingsTab extends PluginSettingTab {
@@ -42,6 +43,8 @@ export class ReferenceSettingsTab extends PluginSettingTab {
       .addToggle(toggle => toggle.setValue(this.plugin.settings.bodyMathScroll).onChange(async value => { this.plugin.settings.bodyMathScroll = value; await this.plugin.saveSettings(); }));
     new Setting(containerEl).setName('输入时建议引用').setDesc('输入 @{、@fig{、@tab{、@add{、@def{ 或 @thm{ 后列出引用候选。支持在鼠标宏插入的括号内补全。')
       .addToggle(toggle => toggle.setValue(this.plugin.settings.suggestions).onChange(async value => { this.plugin.settings.suggestions = value; await this.plugin.saveSettings(); }));
+    if (this.plugin.isMobile) new Setting(containerEl).setName('选中文字时显示引用工具').setDesc('选中后可点“转换引用”或“设为目标”；没有选区时隐藏。')
+      .addToggle(toggle => toggle.setValue(this.plugin.settings.mobileSelectionActions).onChange(async value => { this.plugin.settings.mobileSelectionActions = value; await this.plugin.saveSettings(); }));
     if (!this.plugin.isMobile) new Setting(containerEl).setName('返回浮标位置')
       .addDropdown(dropdown => dropdown.addOptions({ right: '笔记右侧', left: '笔记左侧' }).setValue(this.plugin.settings.buoySide)
         .onChange(async value => { this.plugin.settings.buoySide = value as Settings['buoySide']; await this.plugin.saveSettings(); this.plugin.refreshPanels(); }));
@@ -49,7 +52,9 @@ export class ReferenceSettingsTab extends PluginSettingTab {
       .addButton(button => button.setButtonText('清除浮标').onClick(() => this.plugin.clearBuoys()));
     renderConversionSettings(containerEl, this.plugin);
     containerEl.createEl('h3', { text: '定义与定理' });
-    containerEl.createEl('p', { cls: 'setting-item-description', text: '先选中完整内容，再执行“将选中内容设为引用目标”。检查类型、编号和预览后确认。桌面端可在 Obsidian 快捷键设置中为此命令绑定 Alt+D；如有冲突，请换用其他组合键。此操作不会由 Alt 拖选触发。' });
+    containerEl.createEl('p', { cls: 'setting-item-description', text: this.plugin.isMobile
+      ? '选中完整内容，点选区工具中的“设为目标”，检查类型、编号和预览后确认。也可执行“将选中内容设为引用目标”命令。'
+      : '先选中完整内容，再执行“将选中内容设为引用目标”。检查类型、编号和预览后确认。桌面端可在 Obsidian 快捷键设置中为此命令绑定 Alt+D；如有冲突，请换用其他组合键。此操作不会由 Alt 拖选触发。' });
     const syntax = containerEl.createDiv({ cls: 'reflo-settings-syntax' });
     syntax.createEl('strong', { text: '输入约定' });
     syntax.createEl('pre', { text: '公式引用  @{1.13a}  →  \\tag{1.13a}\n图片引用  @fig{1.3}  →  图片下方 @#fig{1.3}\n表格引用  @tab{1.3}  →  表格下方 @#tab{1.3}\n通用引用  @add{1.3}  →  内容块下方 @#add{1.3}\n定义引用  @def{1.1.1}  →  内容块下方 @#def{1.1.1}\n定理引用  @thm{1.1.1}  →  内容块下方 @#thm{1.1.1}' });

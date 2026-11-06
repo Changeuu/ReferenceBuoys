@@ -55,6 +55,7 @@ class TargetMarkerModal extends Modal {
     kind.createEl('option', { value: 'definition', text: '定义 def' });
     kind.createEl('option', { value: 'theorem', text: '定理 thm' }); kind.value = inferred.kind;
     const label = row.createEl('input', { type: 'text', value: inferred.label, attr: { 'aria-label': '目标编号', placeholder: '编号，例如 1.1.1' } });
+    label.setAttribute('autocapitalize', 'off'); label.setAttribute('autocorrect', 'off'); label.spellcheck = false;
     const result = this.contentEl.createDiv({ cls: 'reflo-target-result', attr: { role: 'status', 'aria-live': 'polite' } });
     this.contentEl.createEl('h3', { text: '内容预览' });
     const preview = this.contentEl.createDiv({ cls: 'reflo-target-preview markdown-rendered' });

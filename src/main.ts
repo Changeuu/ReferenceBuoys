@@ -14,6 +14,7 @@ import { loadProfiles } from './core/conversion';
 import { HeadingLinks } from './heading-links';
 import type { HeadingReference, NavigationTarget } from './core/headings';
 import { TargetMarker } from './target-marker';
+import { MobileSelectionActions } from './ui/mobile-selection';
 
 export default class ReferenceBuoysPlugin extends Plugin {
   readonly isMobile = Platform.isMobile;
@@ -23,6 +24,7 @@ export default class ReferenceBuoysPlugin extends Plugin {
   converter!: SelectionConverter;
   targetMarker!: TargetMarker;
   headingLinks!: HeadingLinks;
+  private mobileSelection?: MobileSelectionActions;
   private originLeaves = new Map<number, WorkspaceLeaf>();
   private navigating = false;
   private followGeneration = 0;
@@ -43,6 +45,7 @@ export default class ReferenceBuoysPlugin extends Plugin {
     this.settings.previewWidth = Math.max(320, Math.min(760, Number(this.settings.previewWidth) || 460));
     this.settings.headingLinks = this.settings.headingLinks !== false;
     this.settings.bodyMathScroll = this.settings.bodyMathScroll !== false;
+    this.settings.mobileSelectionActions = this.settings.mobileSelectionActions !== false;
     this.settings.conversionProfiles = loadProfiles(saved?.settings?.conversionProfiles);
     if (!this.settings.conversionProfiles.some(p => p.id === this.settings.activeConversionProfile)) {
       this.settings.activeConversionProfile = this.settings.conversionProfiles[0].id;
@@ -52,6 +55,7 @@ export default class ReferenceBuoysPlugin extends Plugin {
     this.converter = new SelectionConverter(this);
     this.targetMarker = new TargetMarker(this);
     this.headingLinks = new HeadingLinks(this);
+    if (this.isMobile) this.mobileSelection = new MobileSelectionActions(this);
     this.addSettingTab(new ReferenceSettingsTab(this.app, this));
     this.registerEditorExtension(editorExtensions(this));
     this.registerEditorSuggest(new ReferenceSuggest(this));
@@ -115,6 +119,7 @@ export default class ReferenceBuoysPlugin extends Plugin {
     this.converter?.destroy();
     this.targetMarker?.destroy();
     this.headingLinks?.destroy();
+    this.mobileSelection?.destroy(); this.mobileSelection = undefined;
     this.originLeaves.clear();
     for (const [view, panel] of this.panels) { panel.destroy(); view.contentEl.classList.remove('reflo-body-math-scroll'); }
     this.panels.clear(); this.points.clear(); this.cache.clear(); this.anchorSources.clear(); this.editors.clear();
@@ -133,6 +138,7 @@ export default class ReferenceBuoysPlugin extends Plugin {
     this.editors.set(cm, path);
     const index = cm.state.field(indexField, false);
     if (index) { this.cache.set(path, index); if (!this.anchorSources.has(path)) this.anchorSources.set(path, index.source); }
+    this.mobileSelection?.refresh();
   }
   forgetEditor(cm: EditorView): void { this.editors.delete(cm); }
   editorChanged(update: ViewUpdate): void {
@@ -146,6 +152,7 @@ export default class ReferenceBuoysPlugin extends Plugin {
     this.editors.set(update.view, path);
     this.cache.set(path, update.state.field(indexField));
     this.anchorSources.set(path, update.state.doc.toString());
+    this.mobileSelection?.refresh();
     this.updatePointDescriptions(path);
     this.scheduleUI(true);
   }
@@ -477,6 +484,7 @@ export default class ReferenceBuoysPlugin extends Plugin {
   }
   refreshPanels(): void {
     if (this.disposed) return;
+    this.mobileSelection?.refresh();
     const live = new Set<MarkdownView>();
     for (const leaf of this.app.workspace.getLeavesOfType('markdown')) if (leaf.view instanceof MarkdownView) {
       const view = leaf.view;

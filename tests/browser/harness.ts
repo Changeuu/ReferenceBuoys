@@ -112,7 +112,8 @@ async function boot() {
     addPane: (path: string) => {
       const otherView = new MarkdownView(); otherView.file = files.get(path)!.file;
       otherView.contentEl = document.body.createDiv({ cls: 'test-other-pane' });
-      Object.assign(otherView.contentEl.style, { height: '500px', width: '600px', position: 'relative' });
+      Object.assign(otherView.contentEl.style, { height: Platform.isMobile ? 'calc(100vh - 82px)' : '500px',
+        width: Platform.isMobile ? '100%' : '600px', position: 'relative', background: 'var(--background-primary)' });
       (window as any).__info = otherView;
       const otherCM = new EditorView({ parent: otherView.contentEl, state: EditorState.create({ doc: path === view.file.path ? cm.state.doc.toString() : files.get(path)!.source,
         extensions: [editorInfoField, editorLivePreviewField, ...plugin.extensions, nativeHeadingLinks, EditorView.theme({ '&': { height: '100%' }, '.cm-scroller': { overflow: 'auto' } })] }) });

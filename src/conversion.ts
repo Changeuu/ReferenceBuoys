@@ -39,7 +39,7 @@ export class SelectionConverter {
       cm.dispatch({ changes: { from: range.from, to: range.to, insert: match.replacement },
         selection: { anchor: range.from },
         annotations: isolateHistory.of('full'), userEvent: 'input.reflo-convert' });
-      cm.focus();
+      if (!this.host.isMobile) cm.focus();
     };
     if (matches.length === 1) apply(matches[0]);
     else {

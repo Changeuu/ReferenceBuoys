@@ -6,7 +6,7 @@ import type { NavigationTarget, PreviewReference } from '../core/headings';
 import { contextAround } from '../core/context';
 import { focusMath } from '../core/math-preview';
 import type ReferenceBuoysPlugin from '../main';
-import { clamp, iconButton } from './dom';
+import { bindTouchButton, clamp, iconButton } from './dom';
 
 export interface ReferenceOrigin { path: string; from: number; to: number; cm?: EditorView; view?: MarkdownView }
 interface Preview {
@@ -32,6 +32,7 @@ interface Preview {
   target?: NavigationTarget;
   heading: boolean;
   mobile: boolean;
+  expanded: boolean;
   collapsed: boolean;
   active: boolean;
   restoreButton?: HTMLButtonElement;
@@ -130,6 +131,12 @@ export class PreviewManager {
     const formulaButton = footer.createEl('button', { text: '展开完整公式组', cls: 'reflo-text-button' });
     formulaButton.hidden = true;
     const contextButton = footer.createEl('button', { text: this.host.settings.showContext ? '收起上下文' : '展开上下文', cls: 'reflo-text-button' });
+    const updateContextButton = () => {
+      const open = card?.contextOpen ?? this.host.settings.showContext;
+      contextButton.textContent = mobile ? (open ? '收起上下文' : '上下文') : (open ? '收起上下文' : '展开上下文');
+      contextButton.setAttribute('aria-label', open ? '收起上下文' : '展开上下文');
+      contextButton.setAttribute('aria-expanded', String(open));
+    };
     if (mobile) {
       jumpButton.className = 'reflo-mobile-jump';
       jumpButton.textContent = '跳转';
@@ -142,7 +149,8 @@ export class PreviewManager {
     card = { el, body, context, component, abort, path, heading: ref.kind === 'heading', key: ref.key, origin: { ...origin },
       targetFrom: this.host.navigationTargets(index, ref.key)[0]?.from ?? -1, pinned: false,
       contextOpen: ref.kind !== 'heading' && this.host.settings.showContext, revision: 0, contentSignature: '', nameEl, locationEl, pinButton, jumpButton,
-      formulaButton, formulaExpanded: false, mobile, collapsed: false, active: true };
+      formulaButton, formulaExpanded: false, mobile, expanded: false, collapsed: false, active: true };
+    updateContextButton();
     this.cards.add(card); this.transient = card;
     formulaButton.addEventListener('click', () => {
       card.formulaExpanded = !card.formulaExpanded;
@@ -150,8 +158,7 @@ export class PreviewManager {
     }, { signal });
     contextButton.addEventListener('click', () => {
       card.contextOpen = !card.contextOpen;
-      contextButton.textContent = card.contextOpen ? '收起上下文' : '展开上下文';
-      contextButton.setAttribute('aria-expanded', String(card.contextOpen));
+      updateContextButton();
       card.contentSignature = '';
       void this.render(card);
     }, { signal });
@@ -222,7 +229,8 @@ export class PreviewManager {
     card.el.style.top = 'auto';
     card.el.style.width = `${Math.max(0, width - 16)}px`;
     card.el.style.maxWidth = `${Math.max(0, width - 16)}px`;
-    card.el.style.maxHeight = `${Math.max(80, Math.min(height * .62, height - 100))}px`;
+    card.el.style.maxHeight = `${Math.max(80, Math.min(height * (card.expanded ? .9 : .62), height - 100))}px`;
+    card.el.classList.toggle('is-expanded', card.expanded);
     for (const element of [card.el, card.restoreButton]) if (element) {
       element.style.setProperty('--reflo-mobile-bottom', `${bottom}px`);
     }
@@ -231,6 +239,8 @@ export class PreviewManager {
 
   private enableMobile(card: Preview, header: HTMLElement): void {
     const doc = card.el.ownerDocument, win = doc.defaultView!, signal = card.abort.signal;
+    card.el.querySelectorAll<HTMLButtonElement>('.reflo-preview-controls button, .reflo-preview-footer button')
+      .forEach(button => bindTouchButton(button, signal));
     card.restoreButton = doc.body.createEl('button', {
       cls: 'reflo-mobile-preview-tab', text: `${card.nameEl.textContent} ▴`,
       attr: { type: 'button', 'aria-label': `恢复预览：${card.nameEl.textContent}`, 'aria-haspopup': 'dialog' }
@@ -257,7 +267,15 @@ export class PreviewManager {
       if (gesture?.id !== event.pointerId) return;
       const dy = event.clientY - gesture.y, dx = event.clientX - gesture.x;
       gesture = undefined;
-      if (dy >= 40 && dy > Math.abs(dx)) this.minimize(card);
+      if (Math.abs(dy) < 40 || Math.abs(dy) <= Math.abs(dx)) return;
+      if (header.hasPointerCapture(event.pointerId)) header.releasePointerCapture(event.pointerId);
+      // Let the touch sequence finish before moving its captured header.
+      win.requestAnimationFrame(() => {
+        if (!this.cards.has(card) || card.collapsed) return;
+        if (dy < 0) { card.expanded = true; this.positionMobile(card); }
+        else if (card.expanded) { card.expanded = false; this.positionMobile(card); }
+        else this.minimize(card);
+      });
     }, { signal });
     header.addEventListener('pointercancel', () => { gesture = undefined; }, { signal });
     header.addEventListener('lostpointercapture', () => { gesture = undefined; }, { signal });
@@ -342,7 +360,8 @@ export class PreviewManager {
       if (target.math !== undefined) {
         const focused = focusMath(target.math, target.label);
         card.formulaButton.hidden = !focused;
-        card.formulaButton.textContent = card.formulaExpanded ? '聚焦引用' : '展开完整公式组';
+        card.formulaButton.textContent = card.formulaExpanded ? '聚焦引用' : (card.mobile ? '完整公式' : '展开完整公式组');
+        card.formulaButton.setAttribute('aria-label', card.formulaExpanded ? '聚焦引用' : '展开完整公式组');
         card.formulaButton.setAttribute('aria-expanded', String(card.formulaExpanded));
         if (focused && !card.formulaExpanded) card.locationEl.textContent = `${target.heading} · 公式节选`;
         await loadMathJax();

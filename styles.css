@@ -152,12 +152,12 @@
   touch-action: none;
 }
 .reflo-mobile-preview .reflo-preview-location { display: none; }
-.reflo-mobile-preview .reflo-preview-identity strong { overflow-wrap: anywhere; }
+.reflo-mobile-preview .reflo-preview-identity strong { overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .reflo-mobile-preview .reflo-icon-button { width: 44px; height: 44px; }
 .reflo-mobile-preview .reflo-icon-button svg { width: 18px; height: 18px; }
 .reflo-mobile-preview .reflo-preview-body { min-height: 0; padding: 14px 16px; }
 .reflo-mobile-preview .reflo-preview-context { flex: 1 1 auto; min-height: 64px; max-height: 40%; }
-.reflo-mobile-preview .reflo-preview-footer { padding: 2px 12px; gap: 8px; }
+.reflo-mobile-preview .reflo-preview-footer { padding: 2px 12px; gap: 8px; flex-wrap: wrap; }
 .reflo-mobile-preview .reflo-text-button { min-height: 44px; font-size: 12px; }
 .reflo-mobile-jump { min-height: 44px; min-width: 64px; border: 0; box-shadow: none; background: transparent; color: var(--text-accent); font-size: 13px; }
 .reflo-mobile-jump:disabled { opacity: .4; }
@@ -181,6 +181,30 @@
   touch-action: manipulation;
 }
 .reflo-mobile-preview-tab[hidden] { display: none; }
+.reflo-selection-active .reflo-mobile-preview-tab { display: none; }
+.reflo-mobile-selection {
+  position: fixed;
+  left: 8px;
+  bottom: calc(var(--reflo-mobile-bottom, 60px) + env(safe-area-inset-bottom, 0px));
+  z-index: 1001;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: calc(100vw - 16px);
+  padding: 2px 4px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 10%);
+  touch-action: manipulation;
+}
+.reflo-mobile-selection[hidden] { display: none; }
+.reflo-mobile-selection button { min-height: 44px; padding: 6px 12px; font-size: 13px; color: var(--text-normal); background: transparent; border: 0; box-shadow: none; white-space: nowrap; }
+.reflo-mobile-selection .reflo-icon-button { width: 44px; height: 44px; }
+.is-mobile .reflo-conversion-settings :is(input[type="text"], select, button),
+.is-mobile .reflo-target-editor :is(input[type="text"], select, button) { min-height: 44px; }
+.is-mobile .reflo-conversion-row > input[type="text"] { min-width: 0; flex-basis: 100%; }
+.is-mobile .reflo-suggestion { min-height: 44px; padding: 6px 4px; }
 .reflo-mobile-buoys, .reflo-mobile-buoys[data-side="left"] {
   inset: 0;
   width: auto;

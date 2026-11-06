@@ -10,7 +10,7 @@ Existing heading links such as `[[#Energy]]` and `[[Mechanics#Energy]]` also sup
 
 Built for **Live Preview**, with manual numbering and support for sublabels such as `1.13a` and `1.13b`.
 
-**Version 0.1.10 · Early release · Windows + Android (experimental) · Obsidian 1.8.0 or later**
+**Version 0.1.11 · Early release · Windows + Android (experimental) · Obsidian 1.8.0 or later**
 
 The plugin interface and bundled example notes currently use Simplified Chinese. This guide includes the Chinese names of commands and controls so you can find them.
 
@@ -210,8 +210,10 @@ Use the same ZIP and reference syntax on Android. Copy the `reference-buoys` fol
 | --- | --- |
 | Tap a reference | Open a single preview panel near the bottom of the screen |
 | Tap **跳转** (Jump) in the preview | Jump to the source, leave a return marker, and collapse the preview |
-| Tap the down arrow, swipe down on the title bar, or touch outside the panel | Collapse it into a small label at the bottom left |
-| Tap that label | Restore the same preview, including its scroll position and expanded context |
+| Swipe up on the title bar | Enlarge the preview for long sections and derivations |
+| Swipe down on the title bar | Shrink an enlarged preview; swipe down again to minimize it |
+| Tap the down arrow or touch outside the panel | Collapse it into a small label at the bottom left |
+| Tap that label | Restore the same preview, including its size, scroll position and expanded context |
 | Tap × in the panel | Close the preview completely |
 | Tap a return marker | Return to that reading position and remove only that marker |
 | Long-press a return marker | Open its removal menu |
@@ -220,7 +222,9 @@ Return markers show only a direction and a sequence number, such as `↑ 1` or `
 
 Opening another reference replaces the current mobile preview. The panel adjusts to screen rotation and viewport changes. Jumping and returning do not explicitly focus the editor.
 
-To convert an existing citation, select it and run **转换选中的引用** (Convert selected reference). You can add this command to Obsidian's mobile toolbar. Templates and undo work as on desktop.
+When you select text in the editor, a small toolbar offers **转换引用** (Convert reference) and **设为目标** (Mark target). Conversion only runs when tapped. Marking a definition or theorem still opens a preview for confirmation. Each edit can be undone in one step, and conversion does not explicitly focus the editor. The toolbar disappears when there is no selection. Its × hides it for the current selection; disable **选中文字时显示引用工具** in plugin settings to turn it off entirely. Existing commands remain available in Obsidian's mobile toolbar.
+
+Mobile uses the same mixed-label autocomplete, repeated `{n}` / `{*}` templates and template generator as desktop. Number and template fields disable automatic capitalization and correction. Long formula previews offer **完整公式** (Full formula) and **聚焦引用** (Focus reference), and cross-note heading jumps open a new tab with a return marker. The preview restore label temporarily hides while the selection toolbar is visible.
 
 Android support has passed browser tests with touch input and phone-sized viewports. **Testing in Obsidian on a physical Android device is still needed.** See `手机端体验.md` in the ZIP's example folder for a short walkthrough.
 
@@ -352,7 +356,7 @@ Adjust whether context is expanded by default, autocomplete, and conversion temp
 
 The current release targets **Windows desktop and Android (experimental), especially Live Preview**. Numbered references stay within a note; heading wikilinks also work across notes. Automatic numbering is not supported. iOS has not been tested.
 
-Automated tests cover parsing, context extraction, position tracking, heading section boundaries, cross-note return stacks, selected-reference conversion, template generation, definition/theorem target creation, formula overflow, multi-tag row highlighting, focused equation previews, CodeMirror widgets, and browser interactions. Earlier versions have been tried manually in Obsidian on Windows. The 0.1.10 cross-note navigation changes and Android support still need testing in Obsidian. Browser component tests use a simplified Obsidian API stub with real CodeMirror and MathJax, so they do not replace app testing.
+Automated tests cover parsing, context extraction, position tracking, heading section boundaries, cross-note return stacks, selected-reference conversion, template generation, definition/theorem target creation, formula overflow, multi-tag row highlighting, focused equation previews, CodeMirror widgets, and browser interactions. Earlier versions have been tried manually in Obsidian on Windows. The 0.1.11 mobile changes and Android support still need testing in Obsidian. Browser component tests use a simplified Obsidian API stub with real CodeMirror and MathJax, so they do not replace app testing.
 
 Suggested checks when trying the plugin:
 
@@ -366,6 +370,14 @@ Suggested checks when trying the plugin:
 To [report an issue](https://github.com/Changeuu/ReferenceBuoys/issues), include your Obsidian version, theme, a minimal example note, and the steps that trigger the problem. Use sample content that you are comfortable sharing.
 
 ## Changelog
+
+### 0.1.11
+
+- Add a compact, optional mobile selection toolbar for reference conversion and definition/theorem target creation.
+- Enlarge long previews by swiping up on their title bar; swipe down to shrink, then minimize. Restore the previous size and scroll position.
+- Improve touch controls after swipes, shorten mobile footer labels and enlarge template-setting touch targets.
+- Avoid forcing editor focus after conversion and disable automatic capitalization/correction in label and template inputs.
+- Extend touch tests for selection preservation, undo, settings persistence, keyboard-sized viewports and cross-note returns.
 
 ### 0.1.10
 
