@@ -22,7 +22,7 @@ export function renderConversionSettings(parent: HTMLElement, host: ReferenceBuo
       dragRow.createSpan({ text: '按住修饰键拖选' });
       const drag = select(dragRow, '拖选转换修饰键', [['off', '关闭'], ['Alt', 'Alt（默认）'], ['Control', 'Ctrl']], host.settings.dragConversion);
       drag.addEventListener('change', () => { host.settings.dragConversion = drag.value as DragModifier; save(); });
-      root.createEl('p', { cls: 'setting-item-description', text: '按住修饰键，左键拖选引用，松开鼠标即可转换。松开修饰键或按 Esc 可取消这次转换。Ctrl+Z 撤销。' });
+      root.createEl('p', { cls: 'setting-item-description', text: '按住修饰键拖选，松开鼠标转换为引用；按住 Ctrl+Alt 拖选内容块下方行首的编号，直接生成目标标记（如 @#fig{1.3}）。两种操作共用当前模板组，关闭拖选会同时关闭。提前松开任一所需修饰键或按 Esc 取消，Ctrl+Z 撤销。公式目标仍使用 \\tag{编号}。' });
     }
 
     const profiles = host.settings.conversionProfiles;

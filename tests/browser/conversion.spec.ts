@@ -20,20 +20,75 @@ async function selectText(page: Page, text: string, occurrence = 0) {
     cm.dispatch({ selection: { anchor: from, head: from + text.length } }); cm.focus();
   }, { text, occurrence });
 }
-async function drag(page: Page, from: number, to: number, modifier?: 'Alt' | 'Control', cancel?: 'key' | 'escape') {
+async function drag(page: Page, from: number, to: number, modifier?: 'Alt' | 'Control' | 'Control+Alt', cancel?: 'key' | 'escape' | 'Control' | 'Alt') {
   const coords = await page.evaluate(({ from, to }) => {
     const { cm } = window.lab;
     const a = cm.coordsAtPos(from), b = cm.coordsAtPos(to);
     return { ax: a.left, ay: (a.top + a.bottom) / 2, bx: b.left, by: (b.top + b.bottom) / 2 };
   }, { from, to });
-  if (modifier) await page.keyboard.down(modifier);
+  const keys = modifier?.split('+') ?? [];
+  for (const key of keys) await page.keyboard.down(key);
   await page.mouse.move(coords.ax, coords.ay); await page.mouse.down();
   await page.mouse.move(coords.bx, coords.by, { steps: 12 });
-  if (cancel === 'key' && modifier) await page.keyboard.up(modifier);
+  const released = cancel === 'key' ? keys : keys.filter(key => key === cancel);
+  for (const key of released) await page.keyboard.up(key);
   if (cancel === 'escape') await page.keyboard.press('Escape');
   await page.mouse.up();
-  if (modifier && cancel !== 'key') await page.keyboard.up(modifier);
+  for (const key of keys.filter(key => !released.includes(key)).reverse()) await page.keyboard.up(key);
 }
+
+test('Ctrl+Alt drag marks the selected figure caption in one step and preserves its description', async ({ page }) => {
+  const text = '![[figure.png]]\n图（1.3） 磁场方向\n\n另一处图（1.3）保持原样。';
+  const from = text.indexOf('图（1.3）'), to = from + '图（1.3）'.length;
+  await prepare(page, text);
+  await drag(page, from, to, 'Control+Alt');
+  await expect.poll(() => doc(page)).toBe(text.replace('图（1.3）', '@#fig{1.3}'));
+  await expect(page.locator('.reflo-caption-label')).toHaveText('图 1.3');
+  expect(await page.evaluate(async () => (await window.lab.index()).targets[0].caption)).toBe('磁场方向');
+  await page.keyboard.press('Control+z'); expect(await doc(page)).toBe(text);
+  await page.evaluate(() => window.lab.cm.dispatch({ selection: { anchor: 0 } }));
+  await drag(page, to, from, 'Control+Alt');
+  await expect.poll(() => doc(page)).toBe(text.replace('图（1.3）', '@#fig{1.3}'));
+});
+
+test('target dragging cancels on either early modifier release, Escape, disable or read-only', async ({ page }) => {
+  const text = '![[figure.png]]\n图1.3 图注', from = text.indexOf('图1.3'), to = from + 4;
+  for (const cancel of ['Control', 'Alt', 'escape'] as const) {
+    await prepare(page, text);
+    await drag(page, from, to, 'Control+Alt', cancel);
+    await page.waitForTimeout(60); expect(await doc(page)).toBe(text);
+  }
+  await prepare(page, text);
+  await page.evaluate(() => window.lab.plugin.settings.dragConversion = 'off');
+  await drag(page, from, to, 'Control+Alt'); expect(await doc(page)).toBe(text);
+  await page.evaluate(() => { window.lab.plugin.settings.dragConversion = 'Control'; window.lab.setReadOnly(true); });
+  await drag(page, from, to, 'Control+Alt'); expect(await doc(page)).toBe(text);
+  await page.evaluate(() => { window.lab.setReadOnly(false); window.lab.cm.dispatch({ selection: { anchor: 0 } }); });
+  await drag(page, from, to, 'Control+Alt');
+  await expect.poll(() => doc(page)).toBe(text.replace('图1.3', '@#fig{1.3}'));
+});
+
+test('target dragging keeps equations and misplaced figure captions unchanged', async ({ page }) => {
+  for (const text of ['式1.3', '图1.3']) {
+    await prepare(page, text);
+    await drag(page, 0, text.length, 'Control+Alt');
+    await page.waitForTimeout(60); expect(await doc(page)).toBe(text);
+    expect(await page.evaluate(() => (window as any).notices.at(-1))).toContain(text.startsWith('式') ? 'tag' : '行首');
+  }
+});
+
+test('target dragging uses custom templates and keeps conflicting typed results as explicit choices', async ({ page }) => {
+  const text = '![[figure.png]]\n插图 [1.3] 说明', selected = '插图 [1.3]', from = text.indexOf(selected);
+  await prepare(page, text);
+  await page.evaluate(() => window.lab.plugin.settings.conversionProfiles[0].templates.push(
+    { pattern: '插图 [{n}]', kind: 'figure' }, { pattern: '插图 [{n}]', kind: 'addon' }
+  ));
+  await drag(page, from, from + selected.length, 'Control+Alt');
+  await expect(page.locator('.reflo-conversion-choice')).toHaveCount(2);
+  expect(await doc(page)).toBe(text);
+  await page.getByRole('button', { name: '插图 [{n}] → @#fig{1.3}', exact: true }).click();
+  expect(await doc(page)).toBe(text.replace(selected, '@#fig{1.3}'));
+});
 
 test('ordinary drag only selects; command converts exactly that reference and Ctrl+Z restores it', async ({ page }) => {
   await prepare(page);

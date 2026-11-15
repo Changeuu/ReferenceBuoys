@@ -22,6 +22,7 @@ interface Preview {
   pinned: boolean;
   contextOpen: boolean;
   revision: number;
+  request: number;
   contentSignature: string;
   nameEl: HTMLElement;
   locationEl: HTMLElement;
@@ -52,7 +53,7 @@ export class PreviewManager {
   queue(element: HTMLElement, ref: PreviewReference, origin: ReferenceOrigin): void {
     if (this.host.isMobile) return;
     this.cancelClose();
-    if (this.transient?.key === ref.key && this.transient.path === this.targetPath(ref, origin)) {
+    if (this.transient?.key === ref.key && this.sameSource(this.transient, ref, origin)) {
       this.transient.origin = { ...origin }; return;
     }
     this.cancelOpen();
@@ -89,10 +90,13 @@ export class PreviewManager {
   async open(element: HTMLElement, ref: PreviewReference, origin: ReferenceOrigin): Promise<void> {
     const generation = ++this.openGeneration;
     const path = this.targetPath(ref, origin);
-    const index = await this.host.getIndex(path);
+    // Resolve before creating a card so a delayed lookup cannot leave a stray
+    // mobile restore tab after the reader has switched notes.
+    if (ref.kind === 'heading') await this.host.getIndex(path);
+    else await this.host.referenceTargets(origin.path, ref.key);
     if (this.disposed || generation !== this.openGeneration || !element.isConnected) return;
     const mobile = this.host.isMobile;
-    if (mobile && this.transient?.key === ref.key && this.transient.path === this.targetPath(ref, origin)) {
+    if (mobile && this.transient?.key === ref.key && this.sameSource(this.transient, ref, origin)) {
       this.transient.origin = { ...origin };
       this.restore(this.transient);
       await this.render(this.transient);
@@ -147,8 +151,8 @@ export class PreviewManager {
     contextButton.setAttribute('aria-expanded', String(this.host.settings.showContext));
     const component = new Component(); component.load();
     card = { el, body, context, component, abort, path, heading: ref.kind === 'heading', key: ref.key, origin: { ...origin },
-      targetFrom: this.host.navigationTargets(index, ref.key)[0]?.from ?? -1, pinned: false,
-      contextOpen: ref.kind !== 'heading' && this.host.settings.showContext, revision: 0, contentSignature: '', nameEl, locationEl, pinButton, jumpButton,
+      targetFrom: -1, pinned: false,
+      contextOpen: ref.kind !== 'heading' && this.host.settings.showContext, revision: 0, request: 0, contentSignature: '', nameEl, locationEl, pinButton, jumpButton,
       formulaButton, formulaExpanded: false, mobile, expanded: false, collapsed: false, active: true };
     updateContextButton();
     this.cards.add(card); this.transient = card;
@@ -318,10 +322,16 @@ export class PreviewManager {
   }
 
   private async render(card: Preview): Promise<void> {
-    const index = await this.host.getIndex(card.path);
-    if (!this.cards.has(card)) return;
-    const candidates = this.host.navigationTargets(index, card.key);
-    const signature = JSON.stringify([card.path, candidates.map(t => [t.from, t.markdown, t.caption, t.heading]), card.contextOpen ? index?.source : '', card.formulaExpanded]);
+    const request = ++card.request;
+    const candidates: Array<{ path: string; target: NavigationTarget }> = card.heading
+      ? this.host.navigationTargets(await this.host.getIndex(card.path), card.key).map(target => ({ path: card.path, target }))
+      : await this.host.referenceTargets(card.origin.path, card.key);
+    if (!this.cards.has(card) || request !== card.request) return;
+    const chosen = candidates.length === 1 ? candidates[0]
+      : card.el.dataset.chosen === 'true' ? candidates.find(c => c.path === card.path && c.target.from === card.targetFrom) : undefined;
+    const index = chosen ? await this.host.getIndex(chosen.path) : undefined;
+    if (!this.cards.has(card) || request !== card.request) return;
+    const signature = JSON.stringify([chosen?.path ?? card.path, candidates.map(({ path, target: t }) => [path, t.from, t.markdown, t.caption, t.heading]), card.contextOpen ? index?.source : '', card.formulaExpanded]);
     if (signature === card.contentSignature) return;
     card.contentSignature = signature;
     const revision = ++card.revision;
@@ -333,29 +343,29 @@ export class PreviewManager {
     if (!candidates.length) {
       card.body.createDiv({ cls: 'reflo-empty-icon', text: '∅' });
       card.body.createEl('strong', { text: card.heading ? '未找到这个章节' : '未找到这个编号' });
-      card.body.createEl('p', { text: card.heading ? '检查笔记路径和章节标题是否正确，或目标是否已被删除。' : '检查编号是否一致，或目标是否已被删除。', cls: 'reflo-muted' });
+      card.body.createEl('p', { text: card.heading ? '检查笔记路径和章节标题是否正确，或目标是否已被删除。' : '当前笔记及同文件夹内未找到目标，请检查编号和目标标记。', cls: 'reflo-muted' });
       return;
     }
-    let target: NavigationTarget | undefined;
-    if (candidates.length === 1) target = candidates[0];
-    else if (card.targetFrom >= 0 && card.el.dataset.chosen === 'true') target = candidates.find(t => t.from === card.targetFrom);
-    if (!target) {
+    if (!chosen) {
       card.locationEl.textContent = `${candidates.length} 个同名编号`;
-      card.body.createEl('p', { text: '此篇笔记中编号重复，请选择本次要查看的位置。', cls: 'reflo-muted' });
-      for (const option of candidates) {
+      card.body.createEl('p', { text: '找到多个同号目标，请选择本次要查看的位置。', cls: 'reflo-muted' });
+      for (const { path, target: option } of candidates) {
         const button = card.body.createEl('button', { cls: 'reflo-candidate' });
-        button.createEl('strong', { text: `${option.heading} · 第 ${option.line + 1} 行` });
+        const note = path === card.origin.path ? '' : `${path.replace(/\.md$/, '')} · `;
+        button.createEl('strong', { text: `${note}${option.heading} · 第 ${option.line + 1} 行` });
         button.createSpan({ text: (option.caption || option.math || option.markdown).replace(/\s+/g, ' ').slice(0, 100) });
         button.addEventListener('click', () => {
-          card.targetFrom = option.from; card.el.dataset.chosen = 'true'; card.contentSignature = ''; void this.render(card);
+          card.path = path; card.targetFrom = option.from; card.el.dataset.chosen = 'true'; card.contentSignature = ''; card.formulaExpanded = false; void this.render(card);
         }, { signal: card.abort.signal });
       }
       return;
     }
-    card.target = target; card.targetFrom = target.from;
+    const target = chosen.target;
+    card.path = chosen.path; card.target = target; card.targetFrom = target.from;
     card.jumpButton.disabled = false;
     card.nameEl.textContent = displayName(target);
-    card.locationEl.textContent = card.heading ? card.path.replace(/\.md$/, '') : `${target.heading}${(target.tagCount ?? 0) > 1 ? ' · 完整公式组' : ''}`;
+    const location = `${card.path !== card.origin.path ? card.path.split('/').at(-1)!.replace(/\.md$/, '') + ' · ' : ''}${target.heading}`;
+    card.locationEl.textContent = card.heading ? card.path.replace(/\.md$/, '') : `${location}${(target.tagCount ?? 0) > 1 ? ' · 完整公式组' : ''}`;
     try {
       if (target.math !== undefined) {
         const focused = focusMath(target.math, target.label);
@@ -363,7 +373,7 @@ export class PreviewManager {
         card.formulaButton.textContent = card.formulaExpanded ? '聚焦引用' : (card.mobile ? '完整公式' : '展开完整公式组');
         card.formulaButton.setAttribute('aria-label', card.formulaExpanded ? '聚焦引用' : '展开完整公式组');
         card.formulaButton.setAttribute('aria-expanded', String(card.formulaExpanded));
-        if (focused && !card.formulaExpanded) card.locationEl.textContent = `${target.heading} · 公式节选`;
+        if (focused && !card.formulaExpanded) card.locationEl.textContent = `${location} · 公式节选`;
         await loadMathJax();
         if (revision !== card.revision || !this.cards.has(card)) return;
         const math = focused && !card.formulaExpanded ? focused.math : target.math;
@@ -375,7 +385,7 @@ export class PreviewManager {
         if (math !== target.math && card.body.querySelector('mjx-merror, [data-mjx-error]')) {
           card.body.empty(); card.body.appendChild(renderMath(target.math, true));
           card.formulaButton.hidden = true;
-          card.locationEl.textContent = `${target.heading} · 完整公式组`;
+          card.locationEl.textContent = `${location} · 完整公式组`;
           await finishRenderMath();
           if (revision !== card.revision || !this.cards.has(card)) return;
         }
@@ -419,6 +429,9 @@ export class PreviewManager {
   private targetPath(ref: PreviewReference, origin: ReferenceOrigin): string {
     return ref.kind === 'heading' ? this.host.headingPath(ref.linkpath, origin.path) ?? '' : origin.path;
   }
+  private sameSource(card: Preview, ref: PreviewReference, origin: ReferenceOrigin): boolean {
+    return ref.kind === 'heading' ? card.path === this.targetPath(ref, origin) : card.origin.path === origin.path;
+  }
   mapPositions(path: string, changes: ChangeDesc): void {
     for (const card of this.cards) {
       if (card.origin.path === path) {
@@ -428,7 +441,7 @@ export class PreviewManager {
       if (card.path === path && card.targetFrom >= 0) card.targetFrom = changes.mapPos(card.targetFrom, 1);
     }
   }
-  refresh(path?: string): void { for (const card of this.cards) if (!path || card.path === path) void this.render(card); }
+  refresh(path?: string): void { for (const card of this.cards) if (!path || !card.heading || card.path === path) void this.render(card); }
   setActivePath(path?: string): void {
     this.openGeneration++;
     for (const card of this.cards) {

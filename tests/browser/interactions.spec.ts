@@ -168,7 +168,7 @@ test('English macro completion filters kinds and shift-click edits only the labe
       window.lab.replace(cm.state.doc.length, cm.state.doc.length, `\n\n@${prefix}{1.}`);
       const trigger = suggest.onTrigger({ line: cm.state.doc.lines - 1, ch: 7 }, view.editor, file);
       const context = { ...trigger, editor: view.editor, file };
-      const suggestions = suggest.getSuggestions(context);
+      const suggestions = await suggest.getSuggestions(context);
       suggest.context = context;
       suggest.selectSuggestion(suggestions[0]);
       return { source: cm.state.doc.line(cm.state.doc.lines).text, kinds: suggestions.map((t: any) => t.kind) };

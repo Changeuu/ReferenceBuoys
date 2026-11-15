@@ -3,7 +3,7 @@ import { EditorView } from '@codemirror/view';
 import { isolateHistory } from '@codemirror/commands';
 import type ReferenceBuoysPlugin from './main';
 import { indexField } from './editor';
-import { analyzeDocumentSelection, type ConversionMatch } from './core/conversion';
+import { analyzeDocumentSelection, analyzeTargetSelection, type ConversionAction, type ConversionMatch } from './core/conversion';
 
 export class SelectionConverter {
   private modal?: Modal;
@@ -16,7 +16,7 @@ export class SelectionConverter {
     else new Notice('请在笔记编辑区选中一处引用后再转换。');
   }
 
-  convert(cm: EditorView): void {
+  convert(cm: EditorView, action: ConversionAction = 'reference'): void {
     if (this.disposed) return;
     this.modal?.close(); this.modal = undefined;
     if (cm.state.readOnly || !cm.state.facet(EditorView.editable)) return;
@@ -26,7 +26,7 @@ export class SelectionConverter {
     const index = cm.state.field(indexField);
     const profile = this.host.settings.conversionProfiles.find(p => p.id === this.host.settings.activeConversionProfile)
       ?? this.host.settings.conversionProfiles[0];
-    const { matches, error } = analyzeDocumentSelection(index, range, profile);
+    const { matches, error } = (action === 'target' ? analyzeTargetSelection : analyzeDocumentSelection)(index, range, profile);
     if (!matches.length) { new Notice(error ?? '所选内容不匹配当前模板。可在“引用浮标 → 选中转换”中添加模板。'); return; }
     const path = cm.state.field(editorInfoField, false)?.file?.path;
     const apply = (match: ConversionMatch) => {

@@ -3,7 +3,9 @@ import { displayName, referenceSource, type Target, typedKinds } from './core/mo
 import { referenceSuggestions } from './core/suggestions';
 import type ReferenceBuoysPlugin from './main';
 
-export class ReferenceSuggest extends EditorSuggest<Target> {
+type SuggestedTarget = Target & { sourcePath?: string };
+
+export class ReferenceSuggest extends EditorSuggest<SuggestedTarget> {
   private mathObserver?: IntersectionObserver;
   private pendingMath = new Map<Element, () => void>();
   private mathGeneration = 0;
@@ -27,18 +29,24 @@ export class ReferenceSuggest extends EditorSuggest<Target> {
     const close = /^[^{}]*\}/.exec(tail);
     return { start: { line: cursor.line, ch: from }, end: { line: cursor.line, ch: cursor.ch + (close?.[0].length ?? 0) }, query: match[2] };
   }
-  getSuggestions(context: EditorSuggestContext): Target[] {
+  async getSuggestions(context: EditorSuggestContext): Promise<SuggestedTarget[]> {
     this.clearMath();
-    const index = this.host.getEditorIndex(context.editor, context.file.path);
+    const generation = this.mathGeneration;
+    this.host.getEditorIndex(context.editor, context.file.path);
     const prefix = context.editor.getLine(context.start.line).slice(context.start.ch).match(/^@(fig|tab|add|def|thm)?\{/);
     const kind = typedKinds[prefix?.[1] as keyof typeof typedKinds];
-    return referenceSuggestions(index.targets, context.query, kind);
+    const located = await this.host.suggestionTargets(context.file.path);
+    if (generation !== this.mathGeneration) return [];
+    const targets = located.map(({ path, target }) => ({ ...target, sourcePath: path }));
+    return referenceSuggestions(targets, context.query, kind) as SuggestedTarget[];
   }
-  renderSuggestion(target: Target, el: HTMLElement): void {
+  renderSuggestion(target: SuggestedTarget, el: HTMLElement): void {
     el.addClass('reflo-suggestion');
     const top = el.createDiv({ cls: 'reflo-suggestion-top' });
     top.createEl('strong', { text: displayName(target) });
-    top.createSpan({ text: target.heading, cls: 'reflo-muted' });
+    const note = target.sourcePath && target.sourcePath !== this.context?.file.path
+      ? `${target.sourcePath.split('/').at(-1)!.replace(/\.md$/, '')} · ` : '';
+    top.createSpan({ text: note + target.heading, cls: 'reflo-muted' });
     if (target.math && target.math.length < 600) {
       const mathEl = el.createDiv({ cls: 'reflo-suggestion-math' });
       const math = target.math, generation = this.mathGeneration;

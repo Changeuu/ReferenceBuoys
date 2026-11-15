@@ -1,4 +1,5 @@
 import { kindName, referenceSource, type DocumentIndex, type Span, type TargetKind } from './model';
+import { indexDocument } from './parser';
 
 export interface ConversionTemplate { pattern: string; kind: TargetKind }
 export interface ConversionProfile {
@@ -8,6 +9,7 @@ export interface ConversionProfile {
   templates: ConversionTemplate[];
 }
 export interface ConversionMatch { kind: TargetKind; label: string; replacement: string; template: string }
+export type ConversionAction = 'reference' | 'target';
 export type DragModifier = 'off' | 'Alt' | 'Control';
 export const PRESET_TEMPLATES: ConversionTemplate[] = [
   ...['式{n}', '式({n})', '(式{n})', '公式{n}', '公式({n})', '({n})', 'Eq. ({n})', 'Eq. {n}', 'Equation ({n})']
@@ -175,6 +177,21 @@ export function analyzeDocumentSelection(index: DocumentIndex, range: Span, prof
   };
 }
 
+/** Caption marking uses the same explicit selection and templates, but must actually
+ * attach to a compatible preceding block. Never insert an inert target token. */
+export function analyzeTargetSelection(index: DocumentIndex, range: Span, profile: ConversionProfile): ConversionAnalysis {
+  const analysis = analyzeDocumentSelection(index, range, profile);
+  if (!analysis.matches.length) return analysis;
+  const typed = analysis.matches.filter(match => match.kind !== 'equation');
+  if (!typed.length) return { matches: [], error: '公式目标请在公式中使用 \\tag{编号}；Ctrl+Alt 拖选用于图、表和内容块的编号标记。' };
+  const matches = typed.map(match => ({ ...match, replacement: match.replacement.replace('@', '@#') })).filter(match => {
+    const updated = indexDocument(index.source.slice(0, range.from) + match.replacement + index.source.slice(range.to));
+    const markerFrom = range.from + match.replacement.indexOf('@#');
+    return updated.targets.some(target => target.kind === match.kind && target.label === match.label && target.definition?.from === markerFrom);
+  });
+  return matches.length ? { matches } : { matches: [], error: '请选中内容块下方、行首的编号文字；图编号需紧接图片，表编号需紧接表格。原文已保留。' };
+}
+
 /** Local suggestion from one example; callers keep it editable and require an explicit save. */
 export function suggestTemplate(sample: string, label: string, kind: TargetKind): { pattern?: string; error?: string } {
   label = label.trim(); sample = sample.trim();
@@ -210,4 +227,10 @@ export function suggestTemplate(sample: string, label: string, kind: TargetKind)
 export function modifierHeld(event: Pick<MouseEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>, mode: DragModifier): boolean {
   if (event.metaKey || event.shiftKey) return false;
   return mode === 'Alt' ? event.altKey && !event.ctrlKey : mode === 'Control' ? event.ctrlKey && !event.altKey : false;
+}
+
+export function dragAction(event: Pick<MouseEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>, mode: DragModifier): ConversionAction | undefined {
+  if (mode === 'off' || event.metaKey || event.shiftKey) return;
+  if (event.altKey && event.ctrlKey) return 'target';
+  if (modifierHeld(event, mode)) return 'reference';
 }

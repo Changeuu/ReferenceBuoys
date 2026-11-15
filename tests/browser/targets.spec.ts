@@ -89,13 +89,13 @@ test('typing or converting def/thm citations uses the right namespace in Live Pr
     await page.keyboard.press('Control+Alt+r'); expect(await doc(page)).toBe(source.slice(0,source.lastIndexOf(text))+source.slice(source.lastIndexOf(text)).replace(text,replacement));
   }
   for (const [prefix,kind] of [['def','definition'],['thm','theorem']]) {
-    const result=await page.evaluate(({prefix})=>{
+    const result=await page.evaluate(async ({prefix})=>{
       const {cm,view,file,suggest}=window.lab; const end=cm.state.doc.length;
       window.lab.replace(end,end,`\n@${prefix}{}`);
       const cursor=view.editor.offsetToPos(cm.state.doc.length-1);
       const trigger=suggest.onTrigger(cursor,view.editor,file);
       const context={...trigger,editor:view.editor,file};
-      const candidates=suggest.getSuggestions(context); suggest.context=context;suggest.selectSuggestion(candidates[0]);
+      const candidates=await suggest.getSuggestions(context); suggest.context=context;suggest.selectSuggestion(candidates[0]);
       return {kinds:candidates.map((t:any)=>t.kind),text:cm.state.doc.toString()};
     },{prefix});
     expect(result.kinds).toEqual([kind]);expect(result.text).toContain(`@${prefix}{1.1.1}`);

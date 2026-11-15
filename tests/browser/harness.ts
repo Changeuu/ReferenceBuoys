@@ -1,7 +1,7 @@
 import { Compartment, EditorSelection, EditorState } from '@codemirror/state';
 import { EditorView, keymap, ViewPlugin, Decoration } from '@codemirror/view';
 import { history, undo, redo } from '@codemirror/commands';
-import { MarkdownView, Platform, TFile, editorInfoField, editorLivePreviewField, renderMath, finishRenderMath } from './obsidian-stub';
+import { MarkdownView, Platform, TFile, TFolder, editorInfoField, editorLivePreviewField, renderMath, finishRenderMath } from './obsidian-stub';
 import ReferenceBuoysPlugin from '../../src/main';
 import { ReferenceSuggest } from '../../src/suggest';
 import { renderConversionSettings } from '../../src/ui/conversion-settings';
@@ -35,6 +35,31 @@ async function boot() {
   const file = new TFile('引用浮标体验.md');
   const view = new MarkdownView(); view.file = file; view.contentEl = document.querySelector('#editor')!;
   const files = new Map<string, { file: TFile; source: string }>([[file.path, { file, source }]]);
+  const folders = new Map<string, TFolder>();
+  const parentPath = (path: string) => path.slice(0, path.lastIndexOf('/') + 1).replace(/\/$/, '');
+  const folderFor = (path: string): TFolder => {
+    if (!folders.has(path)) {
+      const folder = new TFolder(path);
+      // Derive children from current file paths so old rename/delete tests also
+      // model Obsidian's live folder tree, without a second stale file registry.
+      Object.defineProperty(folder, 'children', { get: () => {
+        const direct: Array<TFile | TFolder> = [], descendants = new Set<string>();
+        const prefix = path ? `${path}/` : '';
+        for (const { file: item } of files.values()) {
+          if (parentPath(item.path) === path) direct.push(item);
+          else if (item.path.startsWith(prefix)) {
+            const first = item.path.slice(prefix.length).split('/')[0];
+            descendants.add(prefix + first);
+          }
+        }
+        return [...direct, ...[...descendants].map(folderFor)];
+      } });
+      folders.set(path, folder);
+    }
+    return folders.get(path)!;
+  };
+  const attachParent = (file: TFile) => Object.defineProperty(file, 'parent', { get: () => folderFor(parentPath(file.path)) });
+  attachParent(file);
   const events = new Map<string, Array<(...args: any[]) => void>>();
   const on = (name: string, fn: (...args: any[]) => void) => { events.set(name, [...events.get(name) ?? [], fn]); };
   const emit = (name: string, ...args: any[]) => { for (const fn of events.get(name) ?? []) fn(...args); };
@@ -48,7 +73,7 @@ async function boot() {
   const leaves: any[] = [leaf];
   let activeLeaf = leaf;
   const app: any = {
-    vault: { on, getAbstractFileByPath: (path: string) => files.get(path)?.file,
+    vault: { on, getAbstractFileByPath: (path: string) => files.get(path)?.file ?? folders.get(path),
       cachedRead: async (file: TFile) => file.path === view.file.path ? cm.state.doc.toString() : files.get(file.path)?.source },
     metadataCache: { getFirstLinkpathDest: (linkpath: string, sourcePath: string) => {
       const target = linkpath.replace(/\.md$/, '') + '.md';
@@ -129,7 +154,14 @@ async function boot() {
       leaves.push(otherLeaf); plugin.refreshPanels();
       return { view: otherView, cm: otherCM, leaf: otherLeaf };
     },
-    addFile: (path: string, source: string) => { const file = new TFile(path); files.set(path, { file, source }); return file; },
+    addFile: (path: string, source: string) => {
+      const file = new TFile(path); attachParent(file); files.set(path, { file, source }); emit('create', file); return file;
+    },
+    modifyFile: (path: string, source: string) => { const entry = files.get(path)!; entry.source = source; emit('modify', entry.file); },
+    renameFile: (from: string, to: string) => {
+      const entry = files.get(from)!; files.delete(from); entry.file.path = to; files.set(to, entry); emit('rename', entry.file, from);
+    },
+    deleteFile: (path: string) => { const entry = files.get(path)!; files.delete(path); emit('delete', entry.file); },
     openFile: async (path: string) => { await leaf.openFile(files.get(path)!.file); },
     readingLink: async (href: string, lineStart = 0) => {
       const el = view.contentEl.createDiv({ cls: 'test-reading markdown-preview-view' });

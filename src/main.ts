@@ -15,6 +15,7 @@ import { HeadingLinks } from './heading-links';
 import type { HeadingReference, NavigationTarget } from './core/headings';
 import { TargetMarker } from './target-marker';
 import { MobileSelectionActions } from './ui/mobile-selection';
+import { FolderReferences, type LocatedTarget } from './folder-references';
 
 export default class ReferenceBuoysPlugin extends Plugin {
   readonly isMobile = Platform.isMobile;
@@ -29,6 +30,10 @@ export default class ReferenceBuoysPlugin extends Plugin {
   private navigating = false;
   private followGeneration = 0;
   private cache = new Map<string, DocumentIndex>();
+  private pendingIndexes = new Map<string, Promise<DocumentIndex | undefined>>();
+  private folderReferences = new FolderReferences(path => this.getIndex(path), path => this.siblingPaths(path));
+  private referenceElements = new Map<HTMLElement, { ref: Reference; path: string }>();
+  private statusGeneration = 0;
   private anchorSources = new Map<string, string>();
   private editors = new Map<EditorView, string>();
   private panels = new Map<MarkdownView, BuoyPanel>();
@@ -73,6 +78,9 @@ export default class ReferenceBuoysPlugin extends Plugin {
       this.refreshPanels();
     }));
     this.registerEvent(this.app.vault.on('modify', file => { if (file instanceof TFile && file.extension === 'md') void this.externalChange(file); }));
+    this.registerEvent(this.app.vault.on('create', file => {
+      if (file instanceof TFile && file.extension === 'md') this.scheduleUI(true);
+    }));
     this.registerEvent(this.app.vault.on('rename', (file, old) => {
       const points = this.points.get(old);
       if (points) { points.forEach(p => p.path = file.path); this.points.delete(old); this.points.set(file.path, points); }
@@ -81,11 +89,14 @@ export default class ReferenceBuoysPlugin extends Plugin {
       const anchorSource = this.anchorSources.get(old);
       if (anchorSource !== undefined) { this.anchorSources.delete(old); this.anchorSources.set(file.path, anchorSource); }
       for (const [cm, path] of this.editors) if (path === old) this.editors.set(cm, file.path);
-      this.previews.rename(old, file.path); this.refreshPanels();
+      for (const value of this.referenceElements.values()) if (value.path === old) value.path = file.path;
+      this.pendingIndexes.clear();
+      this.previews.rename(old, file.path); this.scheduleUI(true); this.refreshPanels();
     }));
     this.registerEvent(this.app.vault.on('delete', file => {
       for (const point of this.points.get(file.path) ?? []) this.originLeaves.delete(point.id);
-      this.points.delete(file.path); this.cache.delete(file.path); this.anchorSources.delete(file.path); this.previews.refresh(file.path); this.refreshPanels();
+      this.points.delete(file.path); this.cache.delete(file.path); this.pendingIndexes.clear(); this.anchorSources.delete(file.path);
+      this.scheduleUI(true); this.refreshPanels();
     }));
     this.registerDomEvent(document, 'keydown', event => { if (event.key === 'Escape') this.previews.hideForNavigation(); });
     this.registerDomEvent(document, 'scroll', () => this.scheduleUI(), true);
@@ -122,7 +133,8 @@ export default class ReferenceBuoysPlugin extends Plugin {
     this.mobileSelection?.destroy(); this.mobileSelection = undefined;
     this.originLeaves.clear();
     for (const [view, panel] of this.panels) { panel.destroy(); view.contentEl.classList.remove('reflo-body-math-scroll'); }
-    this.panels.clear(); this.points.clear(); this.cache.clear(); this.anchorSources.clear(); this.editors.clear();
+    this.panels.clear(); this.points.clear(); this.cache.clear(); this.pendingIndexes.clear(); this.referenceElements.clear(); this.statusGeneration++;
+    this.anchorSources.clear(); this.editors.clear();
   }
   async saveSettings(): Promise<void> { this.refreshPanels(); await this.saveData({ settings: this.settings }); }
 
@@ -137,7 +149,10 @@ export default class ReferenceBuoysPlugin extends Plugin {
     if (!path) return;
     this.editors.set(cm, path);
     const index = cm.state.field(indexField, false);
-    if (index) { this.cache.set(path, index); if (!this.anchorSources.has(path)) this.anchorSources.set(path, index.source); }
+    if (index) {
+      if (this.cache.get(path) !== index) this.pendingIndexes.delete(path);
+      this.cache.set(path, index); if (!this.anchorSources.has(path)) this.anchorSources.set(path, index.source);
+    }
     this.mobileSelection?.refresh();
   }
   forgetEditor(cm: EditorView): void { this.editors.delete(cm); }
@@ -151,6 +166,7 @@ export default class ReferenceBuoysPlugin extends Plugin {
     if (oldPath === path && (current === undefined || current === oldSource)) this.mapPositions(path, update.changes);
     this.editors.set(update.view, path);
     this.cache.set(path, update.state.field(indexField));
+    this.pendingIndexes.delete(path);
     this.anchorSources.set(path, update.state.doc.toString());
     this.mobileSelection?.refresh();
     this.updatePointDescriptions(path);
@@ -172,33 +188,56 @@ export default class ReferenceBuoysPlugin extends Plugin {
     const source = editor.getValue();
     const current = this.cache.get(path);
     if (current?.source === source) return current;
-    const index = indexDocument(source); this.cache.set(path, index); return index;
+    const index = indexDocument(source); this.pendingIndexes.delete(path); this.cache.set(path, index); return index;
   }
   async getIndex(path: string): Promise<DocumentIndex | undefined> {
+    if (this.disposed) return;
+    const file = this.app.vault.getAbstractFileByPath(path);
+    if (!(file instanceof TFile)) return;
     for (const [cm, candidate] of this.editors) if (candidate === path && cm.dom.isConnected
       && cm.state.field(editorInfoField, false)?.file?.path === path) {
       const index = cm.state.field(indexField, false);
       if (index) return index;
     }
-    const file = this.app.vault.getAbstractFileByPath(path);
-    if (!(file instanceof TFile)) return;
     if (this.cache.has(path)) return this.cache.get(path);
-    const index = indexDocument(await this.app.vault.cachedRead(file));
-    this.cache.set(path, index); return index;
+    const existing = this.pendingIndexes.get(path);
+    if (existing) return existing;
+    const pending: Promise<DocumentIndex | undefined> = this.app.vault.cachedRead(file).then(source => {
+      if (this.disposed || this.app.vault.getAbstractFileByPath(path) !== file) return undefined;
+      if (this.pendingIndexes.get(path) !== pending) return this.getIndex(path);
+      const index = indexDocument(source);
+      this.cache.set(path, index); return index;
+    }).finally(() => { if (this.pendingIndexes.get(path) === pending) this.pendingIndexes.delete(path); });
+    this.pendingIndexes.set(path, pending);
+    return pending;
   }
+  private siblingPaths(path: string): string[] {
+    const file = this.app.vault.getAbstractFileByPath(path);
+    return file instanceof TFile ? (file.parent?.children ?? [])
+      .filter((child): child is TFile => child instanceof TFile && child.extension === 'md' && child.path !== path)
+      .map(child => child.path) : [];
+  }
+  referenceTargets(path: string, key: string): Promise<LocatedTarget[]> { return this.folderReferences.resolve(path, key); }
+  suggestionTargets(path: string): Promise<LocatedTarget[]> { return this.folderReferences.suggestions(path); }
   private async externalChange(file: TFile): Promise<void> {
     if (this.disposed) return;
     if ([...this.editors].some(([cm, path]) => path === file.path && cm.dom.isConnected)) return;
     const before = this.cache.get(file.path);
-    const source = await this.app.vault.cachedRead(file);
-    if (this.disposed) return;
-    if (before) {
+    this.cache.delete(file.path); this.pendingIndexes.delete(file.path);
+    // Files outside the folders in use need no content read or index.
+    if (!before) { this.scheduleUI(true); return; }
+    // Share the guarded read path: another modify or an editor opened during the
+    // read must win over this older asynchronous request.
+    const index = await this.getIndex(file.path);
+    if (!index || this.disposed || this.app.vault.getAbstractFileByPath(file.path) !== file) return;
+    const source = index.source;
+    const anchorSource = this.anchorSources.get(file.path);
+    if (anchorSource === undefined || anchorSource === before.source) {
       const edit = contiguousEdit(before.source, source);
       if (edit) this.mapPositions(file.path, ChangeSet.of(edit, before.source.length));
     }
-    this.cache.set(file.path, indexDocument(source));
     this.anchorSources.set(file.path, source);
-    this.updatePointDescriptions(file.path); this.previews.refresh(file.path); this.refreshPanels();
+    this.updatePointDescriptions(file.path); this.scheduleUI(true); this.refreshPanels();
   }
   cmForView(view: MarkdownView): EditorView | undefined {
     return [...this.editors.keys()].find(cm => cm.dom.isConnected && view.contentEl.contains(cm.dom));
@@ -220,7 +259,12 @@ export default class ReferenceBuoysPlugin extends Plugin {
   }
 
   bindReference(el: HTMLElement, ref: Reference, path: string, cm?: EditorView): void {
-    const origin = (): ReferenceOrigin => ({ path, from: ref.from, to: ref.to, cm });
+    this.referenceElements.set(el, { ref, path });
+    // A sibling may resolve this number. Avoid a false missing marker while loading.
+    el.classList.remove('is-missing', 'is-ambiguous'); el.removeAttribute('aria-description');
+    this.scheduleUI();
+    const origin = (): ReferenceOrigin => ({ path: cm?.state.field(editorInfoField, false)?.file?.path
+      ?? this.referenceElements.get(el)?.path ?? path, from: ref.from, to: ref.to, cm });
     el.addEventListener('pointerdown', event => { if (event.button === 0 && event.pointerType !== 'touch') event.preventDefault(); });
     if (!this.isMobile) {
       el.addEventListener('mouseenter', () => this.previews.queue(el, ref, origin()));
@@ -249,11 +293,13 @@ export default class ReferenceBuoysPlugin extends Plugin {
     cm.dispatch({ selection: { anchor: ref.from + opening + 1, head: ref.to - 1 } }); cm.focus();
   }
   private async followReference(el: HTMLElement, ref: Reference, origin: ReferenceOrigin): Promise<void> {
-    const index = await this.getIndex(origin.path);
-    const candidates = index?.byKey.get(ref.key) ?? [];
+    const generation = ++this.followGeneration;
+    const candidates = await this.referenceTargets(origin.path, ref.key);
+    if (this.disposed || generation !== this.followGeneration || !el.isConnected) return;
+    if (origin.cm && origin.cm.state.field(editorInfoField, false)?.file?.path !== origin.path) return;
     if (candidates.length !== 1) { await this.previews.open(el, ref, origin); return; }
     this.previews.closeTransient();
-    await this.jump(candidates[0], origin);
+    await this.jump(candidates[0].target, origin, candidates[0].path);
   }
 
   headingPath(linkpath: string, sourcePath: string): string | undefined {
@@ -355,13 +401,12 @@ export default class ReferenceBuoysPlugin extends Plugin {
     if (targetPath !== origin.path) {
       const file = this.app.vault.getAbstractFileByPath(targetPath);
       if (!(file instanceof TFile)) { new Notice('目标笔记已不存在。'); return; }
-      const newTab = target.kind === 'heading';
-      const destinationLeaf = newTab ? this.app.workspace.getLeaf('tab') : originLeaf;
+      const destinationLeaf = this.app.workspace.getLeaf('tab');
       try {
         await destinationLeaf.openFile(file, { active: false, eState: { line: current.line } });
       } catch (error) {
         // Clean up only the empty tab created by this jump, never an existing note.
-        if (newTab && destinationLeaf.view.getViewType() === 'empty') destinationLeaf.detach();
+        if (destinationLeaf.view.getViewType() === 'empty') destinationLeaf.detach();
         throw error;
       }
       if (this.disposed || !(destinationLeaf.view instanceof MarkdownView) || destinationLeaf.view.file?.path !== targetPath) return;
@@ -479,8 +524,35 @@ export default class ReferenceBuoysPlugin extends Plugin {
       this.uiTimer = undefined;
       if (this.disposed) return;
       this.refreshPanels(); if (this.previewsPending) this.previews.refresh();
+      void this.refreshReferenceStatuses();
       this.previewsPending = false;
     }, 90);
+  }
+  private async refreshReferenceStatuses(): Promise<void> {
+    const generation = ++this.statusGeneration;
+    const groups = new Map<string, Array<{ el: HTMLElement; ref: Reference }>>();
+    for (const [el, { ref, path }] of this.referenceElements) {
+      if (!el.isConnected) { this.referenceElements.delete(el); continue; }
+      const group = groups.get(path) ?? []; group.push({ el, ref }); groups.set(path, group);
+    }
+    await Promise.all([...groups].map(async ([path, group]) => {
+      try {
+        const local = await this.getIndex(path);
+        const counts = new Map<string, number>();
+        const targets = group.some(({ ref }) => !local?.byKey.has(ref.key))
+          ? (await this.suggestionTargets(path)).map(item => item.target) : local?.targets ?? [];
+        for (const target of targets) counts.set(target.key, (counts.get(target.key) ?? 0) + 1);
+        if (this.disposed || generation !== this.statusGeneration) return;
+        for (const { el, ref } of group) {
+          if (!el.isConnected) continue;
+          const count = counts.get(ref.key) ?? 0;
+          el.classList.toggle('is-missing', count === 0); el.classList.toggle('is-ambiguous', count > 1);
+          if (count === 0) el.setAttribute('aria-description', '当前笔记及同文件夹内未找到目标');
+          else if (count > 1) el.setAttribute('aria-description', '存在重复编号');
+          else el.removeAttribute('aria-description');
+        }
+      } catch (error) { console.error('Reference Buoys: reference status failed', error); }
+    }));
   }
   refreshPanels(): void {
     if (this.disposed) return;

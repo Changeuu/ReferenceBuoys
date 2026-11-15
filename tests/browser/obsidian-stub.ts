@@ -10,7 +10,14 @@ export class Component {
   load() {} unload() { this.cleanups.splice(0).forEach(fn => fn()); }
   register(fn: () => void) { this.cleanups.push(fn); }
 }
-export class TFile { extension = 'md'; constructor(public path: string) {} }
+export class TFolder { children: Array<TFile | TFolder> = []; constructor(public path: string) {} }
+export class TFile {
+  parent!: TFolder;
+  get extension() { return this.path.split('.').at(-1) ?? ''; }
+  get name() { return this.path.split('/').at(-1)!; }
+  get basename() { return this.name.replace(/\.[^.]*$/, ''); }
+  constructor(public path: string) {}
+}
 export class MarkdownView {
   file: any; contentEl!: HTMLElement; editor: any; leaf: any;
   getMode() { return 'source'; }

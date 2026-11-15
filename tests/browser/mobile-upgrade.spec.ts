@@ -179,6 +179,6 @@ test('touching a cross-note heading previews it, opens a new tab, and returns to
   expect(await page.evaluate(() => window.lab.view.file.path)).toBe('引用浮标体验.md');
   await page.locator('.reflo-mobile-buoy:visible').tap();
   expect(await page.evaluate(() => window.lab.app.workspace.getActiveViewOfType() === window.lab.view)).toBe(true);
-  expect(await page.evaluate(() => window.lab.cm.scrollDOM.scrollTop)).toBe(departure);
+  await expect.poll(() => page.evaluate(() => window.lab.cm.scrollDOM.scrollTop)).toBe(departure);
   expect(await page.evaluate(() => window.lab.cm.hasFocus)).toBe(false);
 });

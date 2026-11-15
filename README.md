@@ -4,13 +4,13 @@
 
 **Read math-heavy notes without losing your place.**
 
-Reference Buoys makes it easier to write and read reference-heavy notes in Obsidian. Use simple labels like `@{1.13a}` to reference formulas, figures, tables, and other content within the same note. On desktop, hover to preview and pin multiple previews for comparison. On Android, tap to open a compact preview that collapses into a small label. Jump to the source and return using stacked markers.
+Reference Buoys makes it easier to write and read reference-heavy notes in Obsidian. Use simple labels like `@{1.13a}` to reference formulas, figures, tables, and other content in your note or neighboring notes in the same folder. On desktop, hover to preview and pin multiple previews for comparison. On Android, tap to open a compact preview that collapses into a small label. Jump to the source and return using stacked markers.
 
 Existing heading links such as `[[#Energy]]` and `[[Mechanics#Energy]]` also support previews and return markers across notes.
 
 Built for **Live Preview**, with manual numbering and support for sublabels such as `1.13a` and `1.13b`.
 
-**Version 0.1.11 · Early release · Windows + Android (experimental) · Obsidian 1.8.0 or later**
+**Version 0.1.12 · Early release · Windows + Android (experimental) · Obsidian 1.8.0 or later**
 
 The plugin interface and bundled example notes currently use Simplified Chinese. This guide includes the Chinese names of commands and controls so you can find them.
 
@@ -51,6 +51,20 @@ The release is already built; you do not need Node.js or any build commands to i
 
 Formula, figure, table, and general-content labels are independent: each type can use the same number.
 
+## Numbered references across chapter notes
+
+Keep chapter notes directly in the same folder and use the usual syntax. For example, if `Chapter 2.md` contains `\tag{2.1}`, write `@{2.1}` in `Chapter 3.md`. Figure, table, addon, definition and theorem references work the same way, including `@fig{2.3}` and `@def{2.1}`.
+
+- **The current note takes priority.** Only when it has no target of the same type and label does the plugin look in neighboring Markdown notes.
+- The scope is the **immediate folder only**: no child folders, parent folders or vault-wide numbered-label index.
+- If several neighboring targets share a label, the preview lists their note names and locations for you to choose. It never silently picks the first. Duplicate targets in the current note also require a choice.
+- Desktop hover and mobile tap use the same previews, including full formula groups and context. Images resolve relative to the target note.
+- A jump to another note opens a **new tab**. Returning activates the original tab and restores its reading position; only the used return marker is removed.
+
+No file name is added to the reference text. For stable references across a book, use distinct chapter labels such as `1.1`, `2.1`, and `3.1`. If you later add a local target with the same type and label, that local target takes priority. Autocomplete includes neighboring targets and their note names, omitting labels already supplied by the current note. Selecting a duplicated label inserts the usual syntax; you still choose the intended target in its preview.
+
+Copy the example folder intact and open `同文件夹引用/第三章.md` to try formula, figure, table, definition, duplicate-label and return behavior across three chapter notes.
+
 ## Heading links across notes
 
 Keep your existing Obsidian wikilinks:
@@ -73,7 +87,7 @@ Use one `#` between the note name and heading, regardless of heading level. For 
 - Missing notes or headings show a message without creating a file or a return marker. Duplicate heading names follow Obsidian's heading resolution rules.
 - Return markers stay available across notes, so A → B → C can be followed by returns to B and A. You can also select an older marker directly; only the marker used is removed.
 - Returns prefer the original pane. If that pane was closed, an available pane is used. Cross-note markers show `↩` and the source note name on desktop; mobile keeps a small `↩` tag.
-- This feature handles heading wikilinks in the note body. Plain `[[Note]]` links, `[[#^block]]` links, embeds, and Source mode keep their existing behavior. The numbered `@{...}` references still refer to the current note.
+- This feature handles heading wikilinks in the note body. Plain `[[Note]]` links, `[[#^block]]` links, embeds, and Source mode keep their existing behavior. Unlike numbered references, heading links can explicitly name a note outside the current folder.
 
 Try `章节引用体验.md` and its two companion notes from the example folder. If another plugin also handles heading hovers, this switch lets you choose which preview to use.
 
@@ -196,7 +210,7 @@ An ordinary line break continues the paragraph; a blank line separates paragraph
 3. Check the type, suggested label, full preview, and expandable Markdown output. The label is suggested from an initial heading such as `**定义 1.1.1**` and stays editable.
 4. Click **确认标记** (Confirm). A single content block gets a marker; multiple blocks are grouped in a callout. Existing complete callouts are preserved. Press Ctrl+Z to undo the whole operation.
 
-**Suggested desktop shortcut: Alt+D.** In Obsidian → Settings → Hotkeys, find this command and assign it if it is free; choose another combination if Obsidian reports a conflict. The plugin does not reserve this shortcut. Plain Alt and Alt-drag do not invoke target creation. Mobile users can run the same command from their toolbar.
+**Suggested desktop shortcut: Alt+D.** In Obsidian → Settings → Hotkeys, find this command and assign it if it is free; choose another combination if Obsidian reports a conflict. The plugin does not reserve this shortcut. Plain Alt and Alt-drag do not invoke whole-content target creation. Ctrl+Alt-drag only converts a short label below an existing content block, as described below. Mobile users can run the whole-content command from their toolbar.
 
 The command does not infer where a definition ends or scan the whole note: your selection sets its boundaries. Partial lines, incomplete formula/code blocks, already marked targets, and duplicate labels of the same type are rejected. Cancel leaves the note unchanged; a confirmation cannot overwrite a note or selection changed while the dialog was open.
 
@@ -224,7 +238,7 @@ Opening another reference replaces the current mobile preview. The panel adjusts
 
 When you select text in the editor, a small toolbar offers **转换引用** (Convert reference) and **设为目标** (Mark target). Conversion only runs when tapped. Marking a definition or theorem still opens a preview for confirmation. Each edit can be undone in one step, and conversion does not explicitly focus the editor. The toolbar disappears when there is no selection. Its × hides it for the current selection; disable **选中文字时显示引用工具** in plugin settings to turn it off entirely. Existing commands remain available in Obsidian's mobile toolbar.
 
-Mobile uses the same mixed-label autocomplete, repeated `{n}` / `{*}` templates and template generator as desktop. Number and template fields disable automatic capitalization and correction. Long formula previews offer **完整公式** (Full formula) and **聚焦引用** (Focus reference), and cross-note heading jumps open a new tab with a return marker. The preview restore label temporarily hides while the selection toolbar is visible.
+Mobile uses the same mixed-label autocomplete, repeated `{n}` / `{*}` templates and template generator as desktop. Number and template fields disable automatic capitalization and correction. Long formula previews offer **完整公式** (Full formula) and **聚焦引用** (Focus reference). Numbered references to neighboring notes and cross-note heading links both preview on tap and open a new tab when you jump, with a return marker. The preview restore label temporarily hides while the selection toolbar is visible.
 
 Android support has passed browser tests with touch input and phone-sized viewports. **Testing in Obsidian on a physical Android device is still needed.** See `手机端体验.md` in the ZIP's example folder for a short walkthrough.
 
@@ -276,7 +290,22 @@ You can also select normally and run **转换选中的引用** (Convert selected
 - Each conversion is a separate undo step. Press **Ctrl+Z** to restore the original text.
 - Code, display formulas, partial selections inside math, and existing plugin reference tokens are left unchanged. A complete inline math span containing only the reference label can be converted with an explicit matching template.
 - Conversion changes only the reference text. The target formula still needs its `\tag{label}`; other targets need the corresponding label markers.
-- In **选中转换** (Selection conversion) settings, you can disable modifier-drag conversion or change Alt to Ctrl. The command and context menu remain available.
+- In **选中转换** (Selection conversion) settings, you can change the reference modifier from Alt to Ctrl. Disabling drag conversion turns off both reference dragging and Ctrl+Alt target dragging; the command and context menu remain available.
+
+#### Convert a caption label directly into a target
+
+Hold **Ctrl+Alt**, drag over just the label at the start of a caption below its content, then release the mouse while holding both keys. For example:
+
+```text
+Before: Fig. 1.3 Direction of the field
+After:  @#fig{1.3} Direction of the field
+```
+
+The image must be immediately above this caption. The remaining caption text is preserved. This uses the active conversion templates: table, addon, definition and theorem labels become `@#tab{}`, `@#add{}`, `@#def{}` and `@#thm{}` below their corresponding content blocks. If the result would not attach to a valid block, the original text stays unchanged and a message explains the placement needed.
+
+Formula targets still use `\tag{label}` inside the formula; Ctrl+Alt-drag does not create an `@#{}` marker. To mark a whole multi-paragraph definition or theorem, use the selection-and-confirmation command above.
+
+Releasing either Ctrl or Alt early, pressing Esc, or leaving the application cancels target conversion. Ctrl+Z undoes it in one step. Normal **Alt-drag still creates a reference**, such as `@fig{1.3}`.
 
 #### Configure templates for a book
 
@@ -317,7 +346,7 @@ The ZIP includes `选中转换练习.md` for practicing conversion.
 
 ### Enter references directly
 
-A useful mouse macro is: **type `@{}` → press Left Arrow**. Then enter the label. Autocomplete suggests references in the current note, with formula previews and section names.
+A useful mouse macro is: **type `@{}` → press Left Arrow**. Then enter the label. Autocomplete suggests references in the current note and neighboring notes in the same folder, with formula previews, section names and source note names. Local labels take priority over neighboring labels of the same type.
 
 Labels can mix numbers, dots and letters: typing `@{1.}` also finds `1.1.b`, `1.1.52c` and `1.1.Gauss`. Exact label and prefix matches appear before matches in formula content, with natural numeric ordering. All matches remain available by scrolling. Search ignores case, while choosing a candidate preserves its original label and case. Formula thumbnails load as candidates become visible.
 
@@ -354,9 +383,9 @@ Adjust whether context is expanded by default, autocomplete, and conversion temp
 
 ## Scope and testing
 
-The current release targets **Windows desktop and Android (experimental), especially Live Preview**. Numbered references stay within a note; heading wikilinks also work across notes. Automatic numbering is not supported. iOS has not been tested.
+The current release targets **Windows desktop and Android (experimental), especially Live Preview**. Numbered references resolve locally first and can fall back to Markdown notes directly in the same folder. Heading wikilinks can name notes elsewhere in the vault. Automatic numbering is not supported. iOS has not been tested.
 
-Automated tests cover parsing, context extraction, position tracking, heading section boundaries, cross-note return stacks, selected-reference conversion, template generation, definition/theorem target creation, formula overflow, multi-tag row highlighting, focused equation previews, CodeMirror widgets, and browser interactions. Earlier versions have been tried manually in Obsidian on Windows. The 0.1.11 mobile changes and Android support still need testing in Obsidian. Browser component tests use a simplified Obsidian API stub with real CodeMirror and MathJax, so they do not replace app testing.
+Automated tests cover parsing, context extraction, position tracking, heading section boundaries, cross-note return stacks, selected-reference conversion, template generation, definition/theorem target creation, formula overflow, multi-tag row highlighting, focused equation previews, CodeMirror widgets, and browser interactions. Earlier versions have been tried manually in Obsidian on Windows. The 0.1.12 changes and Android support still need testing in Obsidian. Browser component tests use a simplified Obsidian API stub with real CodeMirror and MathJax, so they do not replace app testing.
 
 Suggested checks when trying the plugin:
 
@@ -370,6 +399,14 @@ Suggested checks when trying the plugin:
 To [report an issue](https://github.com/Changeuu/ReferenceBuoys/issues), include your Obsidian version, theme, a minimal example note, and the steps that trigger the problem. Use sample content that you are comfortable sharing.
 
 ## Changelog
+
+### 0.1.12
+
+- Convert caption labels directly to target markers with Ctrl+Alt-drag, using the current templates and preserving caption text. Ordinary Alt-drag still converts references.
+- Validate that a generated target marker attaches to compatible content; retain the original selection for unsupported formulas or misplaced captions.
+- Preview and jump to numbered targets in neighboring Markdown notes when no local target exists. Limit lookup to the immediate folder.
+- Show source note names for duplicate targets and autocomplete suggestions; open cross-note targets in new tabs and keep return markers on desktop and mobile.
+- Add a three-chapter example for same-folder references.
 
 ### 0.1.11
 

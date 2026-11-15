@@ -5,23 +5,25 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('short-prefix suggestions include and insert each reported label after 40 numeric tags', async ({ page }) => {
-  const result = await page.evaluate(() => {
+  const result = await page.evaluate(async () => {
     const { cm, suggest, view, file } = window.lab;
     const labels = ['1.1.b', '1.1.52c', '1.1.Gauss'];
     const math = [...Array.from({ length: 40 }, (_, i) => `1.${i + 1}`), ...labels]
       .map(label => `$$ x=1 \\tag{${label}} $$`).join('\n\n');
     window.lab.replace(0, cm.state.doc.length, math);
-    return labels.map(label => {
+    const result = [];
+    for (const label of labels) {
       window.lab.replace(cm.state.doc.length, cm.state.doc.length, '\n\n@{1.}');
       const trigger = suggest.onTrigger({ line: cm.state.doc.lines - 1, ch: 4 }, view.editor, file);
       const context = { ...trigger, editor: view.editor, file };
-      const candidates = suggest.getSuggestions(context);
+      const candidates = await suggest.getSuggestions(context);
       suggest.context = context;
       const candidate = candidates.find((t: any) => t.label === label);
       if (candidate) suggest.selectSuggestion(candidate);
-      return { label, count: candidates.length, limit: suggest.limit, position: candidates.indexOf(candidate),
-        inserted: cm.state.doc.line(cm.state.doc.lines).text, cursor: view.editor.getCursor().ch };
-    });
+      result.push({ label, count: candidates.length, limit: suggest.limit, position: candidates.indexOf(candidate),
+        inserted: cm.state.doc.line(cm.state.doc.lines).text, cursor: view.editor.getCursor().ch });
+    }
+    return result;
   });
   for (const item of result) {
     expect(item.count).toBe(43); expect(item.limit).toBeGreaterThanOrEqual(item.count);
@@ -31,14 +33,14 @@ test('short-prefix suggestions include and insert each reported label after 40 n
 });
 
 test('a long candidate list renders math on scroll and keeps late named labels selectable', async ({ page }) => {
-  const count = await page.evaluate(() => {
+  const count = await page.evaluate(async () => {
     const { cm, suggest, view, file } = window.lab;
     const math = [...Array.from({ length: 160 }, (_, i) => `1.1.${i}`), '1.1.Gauss']
       .map(label => `$$ x=1 \\tag{${label}} $$`).join('\n\n');
     window.lab.replace(0, cm.state.doc.length, math + '\n\n@{1.}');
     const trigger = suggest.onTrigger({ line: cm.state.doc.lines - 1, ch: 4 }, view.editor, file);
     const context = { ...trigger, editor: view.editor, file }; suggest.context = context;
-    const candidates = suggest.getSuggestions(context);
+    const candidates = await suggest.getSuggestions(context);
     // EditorSuggest itself belongs to Obsidian. This scroll container exercises
     // our renderer with real IntersectionObserver and MathJax in the browser.
     const list = document.body.createDiv({ cls: 'test-suggest-list' });
@@ -69,7 +71,7 @@ test('changing queries, closing suggestions and unloading disconnect pending mat
     window.lab.replace(cm.state.doc.length, cm.state.doc.length, '\n\n@{1.}');
     const trigger = suggest.onTrigger({ line: cm.state.doc.lines - 1, ch: 4 }, view.editor, file);
     const context = { ...trigger, editor: view.editor, file };
-    const target = suggest.getSuggestions(context)[0];
+    const target = (await suggest.getSuggestions(context))[0];
     const old = document.createElement('div'); suggest.renderSuggestion(target, old);
     suggest.getSuggestions({ ...context, query: 'Gauss' }); document.body.appendChild(old);
     const closed = document.createElement('div'); suggest.renderSuggestion(target, closed);
