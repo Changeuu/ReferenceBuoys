@@ -16,6 +16,7 @@ import type { HeadingReference, NavigationTarget } from './core/headings';
 import { TargetMarker } from './target-marker';
 import { MobileSelectionActions } from './ui/mobile-selection';
 import { FolderReferences, type LocatedTarget } from './folder-references';
+import { MobileReferenceInput, modifiedInput } from './mobile-reference-input';
 
 export default class ReferenceBuoysPlugin extends Plugin {
   readonly isMobile = Platform.isMobile;
@@ -26,6 +27,7 @@ export default class ReferenceBuoysPlugin extends Plugin {
   targetMarker!: TargetMarker;
   headingLinks!: HeadingLinks;
   private mobileSelection?: MobileSelectionActions;
+  private mobileReferenceInput?: MobileReferenceInput;
   private originLeaves = new Map<number, WorkspaceLeaf>();
   private navigating = false;
   private followGeneration = 0;
@@ -51,12 +53,14 @@ export default class ReferenceBuoysPlugin extends Plugin {
     this.settings.headingLinks = this.settings.headingLinks !== false;
     this.settings.bodyMathScroll = this.settings.bodyMathScroll !== false;
     this.settings.mobileSelectionActions = this.settings.mobileSelectionActions !== false;
+    this.settings.penReadingMode = this.settings.penReadingMode === true;
     this.settings.conversionProfiles = loadProfiles(saved?.settings?.conversionProfiles);
     if (!this.settings.conversionProfiles.some(p => p.id === this.settings.activeConversionProfile)) {
       this.settings.activeConversionProfile = this.settings.conversionProfiles[0].id;
     }
     if (!['off', 'Alt', 'Control'].includes(this.settings.dragConversion)) this.settings.dragConversion = 'Alt';
     this.previews = new PreviewManager(this);
+    if (this.isMobile) this.mobileReferenceInput = new MobileReferenceInput(document, () => this.settings.penReadingMode);
     this.converter = new SelectionConverter(this);
     this.targetMarker = new TargetMarker(this);
     this.headingLinks = new HeadingLinks(this);
@@ -131,6 +135,7 @@ export default class ReferenceBuoysPlugin extends Plugin {
     this.targetMarker?.destroy();
     this.headingLinks?.destroy();
     this.mobileSelection?.destroy(); this.mobileSelection = undefined;
+    this.mobileReferenceInput?.destroy(); this.mobileReferenceInput = undefined;
     this.originLeaves.clear();
     for (const [view, panel] of this.panels) { panel.destroy(); view.contentEl.classList.remove('reflo-body-math-scroll'); }
     this.panels.clear(); this.points.clear(); this.cache.clear(); this.pendingIndexes.clear(); this.referenceElements.clear(); this.statusGeneration++;
@@ -265,7 +270,16 @@ export default class ReferenceBuoysPlugin extends Plugin {
     this.scheduleUI();
     const origin = (): ReferenceOrigin => ({ path: cm?.state.field(editorInfoField, false)?.file?.path
       ?? this.referenceElements.get(el)?.path ?? path, from: ref.from, to: ref.to, cm });
-    el.addEventListener('pointerdown', event => { if (event.button === 0 && event.pointerType !== 'touch') event.preventDefault(); });
+    el.addEventListener('pointerdown', event => {
+      if (event.button !== 0 || (this.isMobile && this.settings.penReadingMode && modifiedInput(event))) return;
+      if (event.pointerType !== 'touch') event.preventDefault();
+      if (this.isMobile && this.settings.penReadingMode) event.stopPropagation();
+    });
+    el.addEventListener('mousedown', event => {
+      if (this.isMobile && this.settings.penReadingMode && event.button === 0 && !modifiedInput(event)) {
+        event.preventDefault(); event.stopPropagation();
+      }
+    });
     if (!this.isMobile) {
       el.addEventListener('mouseenter', () => this.previews.queue(el, ref, origin()));
       el.addEventListener('mouseleave', event => this.previews.leaveSource(event.relatedTarget));
@@ -273,19 +287,36 @@ export default class ReferenceBuoysPlugin extends Plugin {
       el.addEventListener('blur', event => this.previews.leaveSource(event.relatedTarget));
     }
     el.addEventListener('click', event => {
+      if (event.button !== 0) return;
       event.preventDefault(); event.stopPropagation();
       if (event.shiftKey && cm) { this.editReference(cm, ref); return; }
-      if (this.isMobile) { void this.previews.open(el, ref, origin()); return; }
-      void this.followReference(el, ref, origin());
+      if (this.isMobile && this.settings.penReadingMode && modifiedInput(event)) return;
+      this.activateReference(el, ref, origin(), event);
     });
     el.addEventListener('contextmenu', event => {
       if (!cm) return;
       event.preventDefault();
       const menu = new Menu();
       menu.addItem(item => item.setTitle('编辑引用').setIcon('pencil').onClick(() => this.editReference(cm, ref)));
-      menu.addItem(item => item.setTitle('预览引用').setIcon('scan-eye').onClick(() => { void this.previews.open(el, ref, origin()); }));
+      menu.addItem(item => item.setTitle('预览引用').setIcon('scan-eye').onClick(() => { this.previewReference(el, ref, origin()); }));
       menu.showAtMouseEvent(event);
     });
+  }
+  activateReference(el: HTMLElement, ref: Reference | HeadingReference, origin: ReferenceOrigin, event?: MouseEvent): void {
+    if (this.isMobile) {
+      const action = event && this.mobileReferenceInput ? this.mobileReferenceInput.activation(event, el) : 'preview';
+      if (action === 'ignore') return;
+      if (action === 'preview') { this.previewReference(el, ref, origin); return; }
+    }
+    // Keep an active jump if a second finger tap arrives while its tab is opening.
+    if (this.navigating) return;
+    if (ref.kind === 'heading') void this.followHeading(el, ref, origin);
+    else void this.followReference(el, ref, origin);
+  }
+  private previewReference(el: HTMLElement, ref: Reference | HeadingReference, origin: ReferenceOrigin): void {
+    // A pen preview supersedes an earlier finger's still-pending target lookup.
+    this.followGeneration++;
+    void this.previews.open(el, ref, origin);
   }
   private editReference(cm: EditorView, ref: Reference): void {
     this.previews.closeTransient();
@@ -294,12 +325,13 @@ export default class ReferenceBuoysPlugin extends Plugin {
   }
   private async followReference(el: HTMLElement, ref: Reference, origin: ReferenceOrigin): Promise<void> {
     const generation = ++this.followGeneration;
+    this.previews.closeTransient();
     const candidates = await this.referenceTargets(origin.path, ref.key);
     if (this.disposed || generation !== this.followGeneration || !el.isConnected) return;
     if (origin.cm && origin.cm.state.field(editorInfoField, false)?.file?.path !== origin.path) return;
     if (candidates.length !== 1) { await this.previews.open(el, ref, origin); return; }
     this.previews.closeTransient();
-    await this.jump(candidates[0].target, origin, candidates[0].path);
+    await this.jump(candidates[0].target, origin, candidates[0].path, generation);
   }
 
   headingPath(linkpath: string, sourcePath: string): string | undefined {
@@ -324,13 +356,14 @@ export default class ReferenceBuoysPlugin extends Plugin {
   }
   async followHeading(el: HTMLElement, ref: HeadingReference, origin: ReferenceOrigin): Promise<void> {
     const generation = ++this.followGeneration;
+    this.previews.closeTransient();
     const path = this.headingPath(ref.linkpath, origin.path);
     const target = path ? this.navigationTargets(await this.getIndex(path), ref.key)[0] : undefined;
     if (this.disposed || generation !== this.followGeneration || !el.isConnected || !this.settings.headingLinks) return;
     if (origin.cm && origin.cm.state.field(editorInfoField, false)?.file?.path !== origin.path) return;
     if (!target) { await this.previews.open(el, ref, origin); return; }
     this.previews.closeTransient();
-    await this.jump(target, origin, path);
+    await this.jump(target, origin, path, generation);
   }
   originForPreview(origin: ReferenceOrigin): ReferenceOrigin {
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
@@ -341,20 +374,24 @@ export default class ReferenceBuoysPlugin extends Plugin {
   }
   returnPoints(): ReturnPoint[] { return [...this.points.values()].flat().sort((a, b) => a.id - b.id); }
 
-  async jump(target: NavigationTarget, origin: ReferenceOrigin, targetPath = origin.path): Promise<void> {
+  async jump(target: NavigationTarget, origin: ReferenceOrigin, targetPath = origin.path, request?: number): Promise<void> {
     if (this.navigating || this.disposed) return;
+    const generation = request ?? ++this.followGeneration;
+    if (generation !== this.followGeneration) return;
     this.navigating = true;
-    try { await this.performJump(target, origin, targetPath); }
+    try { await this.performJump(target, origin, targetPath, () => !this.disposed && generation === this.followGeneration); }
     catch (error) { console.error('Reference Buoys: navigation failed', error); new Notice('无法打开目标笔记，请重试。'); }
     finally { this.navigating = false; }
   }
-  private async performJump(target: NavigationTarget, origin: ReferenceOrigin, targetPath: string): Promise<void> {
+  private async performJump(target: NavigationTarget, origin: ReferenceOrigin, targetPath: string, currentRequest: () => boolean): Promise<void> {
     let view = this.viewForOrigin(origin);
     if (!view) {
       const file = this.app.vault.getAbstractFileByPath(origin.path);
       if (!(file instanceof TFile)) { new Notice('这篇笔记已不存在。'); return; }
       const leaf = this.app.workspace.getLeaf(false);
+      if (!currentRequest()) return;
       await leaf.openFile(file);
+      if (!currentRequest()) return;
       if (leaf.view instanceof MarkdownView) view = leaf.view;
     }
     if (!view?.file) return;
@@ -362,7 +399,7 @@ export default class ReferenceBuoysPlugin extends Plugin {
     const destinationIndex = targetPath === origin.path ? index : await this.getIndex(targetPath);
     const candidates = this.navigationTargets(destinationIndex, target.key);
     const current = candidates.length === 1 ? candidates[0] : candidates.find(t => t.from === target.from);
-    if (this.disposed || view.file?.path !== origin.path) return;
+    if (!currentRequest() || view.file?.path !== origin.path) return;
     if (!current || !index || !destinationIndex) { new Notice('目标已变化，请重新预览后跳转。'); return; }
     const cm = view.getMode() === 'source' ? this.cmForView(view) : undefined;
     let safeFrom = Math.max(0, Math.min(origin.from, index.source.length));
@@ -409,7 +446,12 @@ export default class ReferenceBuoysPlugin extends Plugin {
         if (destinationLeaf.view.getViewType() === 'empty') destinationLeaf.detach();
         throw error;
       }
-      if (this.disposed || !(destinationLeaf.view instanceof MarkdownView) || destinationLeaf.view.file?.path !== targetPath) return;
+      if (!currentRequest()) {
+        if (destinationLeaf.view instanceof MarkdownView && destinationLeaf.view.file?.path === targetPath
+          && destinationLeaf !== this.app.workspace.activeLeaf) destinationLeaf.detach();
+        return;
+      }
+      if (!(destinationLeaf.view instanceof MarkdownView) || destinationLeaf.view.file?.path !== targetPath) return;
       view = destinationLeaf.view;
     }
     points.push(point); this.points.set(origin.path, points);

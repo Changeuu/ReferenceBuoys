@@ -151,6 +151,11 @@
   cursor: default;
   touch-action: none;
 }
+.reflo-mobile-preview.is-pinned { resize: none; }
+.reflo-pen-preview .reflo-preview-header { cursor: grab; }
+.reflo-pen-preview.is-dragging .reflo-preview-header { cursor: grabbing; }
+.reflo-pen-preview .reflo-preview-body,
+.reflo-pen-preview .reflo-preview-context { touch-action: pan-x pan-y; }
 .reflo-mobile-preview .reflo-preview-location { display: none; }
 .reflo-mobile-preview .reflo-preview-identity strong { overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .reflo-mobile-preview .reflo-icon-button { width: 44px; height: 44px; }

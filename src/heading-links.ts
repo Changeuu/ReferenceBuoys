@@ -24,24 +24,34 @@ export class HeadingLinks {
         if (mouse.button !== 0 || modified(mouse) || !resolve(event)) return;
         // Avoid moving the caret into the source token or triggering native navigation before click.
         event.stopPropagation();
-        if (!this.host.isMobile) event.preventDefault();
+        if (this.host.isMobile && this.host.settings.penReadingMode) event.stopImmediatePropagation();
+        if (!this.host.isMobile || (this.host.settings.penReadingMode
+          && (type === 'mousedown' || (event as PointerEvent).pointerType !== 'touch'))) event.preventDefault();
       }, options);
       view.contentEl.addEventListener('click', event => {
         if (event.button !== 0 || modified(event)) return;
         const link = resolve(event); if (!link) return;
         event.preventDefault(); event.stopPropagation();
-        if (this.host.isMobile) void this.host.previews.open(link.el, link.ref, link.origin);
-        else void this.host.followHeading(link.el, link.ref, link.origin);
+        if (this.host.isMobile && this.host.settings.penReadingMode) event.stopImmediatePropagation();
+        this.host.activateReference(link.el, link.ref, link.origin, event);
       }, options);
       view.contentEl.addEventListener('mouseover', event => {
-        if (this.host.isMobile || modified(event)) return;
+        if (this.host.isMobile) {
+          if (this.host.settings.penReadingMode && resolve(event)) event.stopPropagation();
+          return;
+        }
+        if (modified(event)) return;
         const link = resolve(event); if (!link) return;
         // Core Page Preview listens for the same native link hover; one preview is enough.
         event.stopPropagation();
         if (event.relatedTarget instanceof Node && link.el.contains(event.relatedTarget)) return;
         this.host.previews.queue(link.el, link.ref, link.origin);
       }, options);
+      view.contentEl.addEventListener('pointerover', event => {
+        if (this.host.isMobile && this.host.settings.penReadingMode && !modified(event) && resolve(event)) event.stopPropagation();
+      }, options);
       view.contentEl.addEventListener('mouseout', event => {
+        if (this.host.isMobile) return;
         const link = resolve(event); if (!link) return;
         if (event.relatedTarget instanceof Node && link.el.contains(event.relatedTarget)) return;
         this.host.previews.leaveSource(event.relatedTarget);
@@ -51,14 +61,14 @@ export class HeadingLinks {
         if (link && !this.host.isMobile) this.host.previews.queue(link.el, link.ref, link.origin);
       }, options);
       view.contentEl.addEventListener('focusout', event => {
+        if (this.host.isMobile) return;
         if (resolve(event)) this.host.previews.leaveSource(event.relatedTarget);
       }, options);
       view.contentEl.addEventListener('keydown', event => {
         if (event.key !== 'Enter' || modified(event)) return;
         const link = resolve(event); if (!link) return;
         event.preventDefault(); event.stopPropagation();
-        if (this.host.isMobile) void this.host.previews.open(link.el, link.ref, link.origin);
-        else void this.host.followHeading(link.el, link.ref, link.origin);
+        this.host.activateReference(link.el, link.ref, link.origin);
       }, options);
     }
   }

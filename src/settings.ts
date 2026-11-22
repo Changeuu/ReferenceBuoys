@@ -11,6 +11,7 @@ export interface Settings {
   headingLinks: boolean;
   suggestions: boolean;
   mobileSelectionActions: boolean;
+  penReadingMode: boolean;
   buoySide: 'left' | 'right';
   dragConversion: DragModifier;
   activeConversionProfile: string;
@@ -18,7 +19,7 @@ export interface Settings {
 }
 export const DEFAULT_SETTINGS: Settings = {
   hoverDelay: 320, previewWidth: 460, showContext: false, headingLinks: true, bodyMathScroll: true, suggestions: true, mobileSelectionActions: true, buoySide: 'right',
-  dragConversion: 'Alt', activeConversionProfile: 'default', conversionProfiles: defaultProfiles()
+  penReadingMode: false, dragConversion: 'Alt', activeConversionProfile: 'default', conversionProfiles: defaultProfiles()
 };
 export class ReferenceSettingsTab extends PluginSettingTab {
   constructor(app: App, private plugin: ReferenceBuoysPlugin) { super(app, plugin); }
@@ -43,6 +44,12 @@ export class ReferenceSettingsTab extends PluginSettingTab {
       .addToggle(toggle => toggle.setValue(this.plugin.settings.bodyMathScroll).onChange(async value => { this.plugin.settings.bodyMathScroll = value; await this.plugin.saveSettings(); }));
     new Setting(containerEl).setName('输入时建议引用').setDesc('输入 @{、@fig{、@tab{、@add{、@def{ 或 @thm{ 后列出本篇及同文件夹的引用候选。支持在鼠标宏插入的括号内补全。')
       .addToggle(toggle => toggle.setValue(this.plugin.settings.suggestions).onChange(async value => { this.plugin.settings.suggestions = value; await this.plugin.saveSettings(); }));
+    if (this.plugin.isMobile) new Setting(containerEl).setName('手写笔阅读模式').setDesc('用笔点引用预览，用手指点引用跳转。拖动预览顶栏可保留窗口，对照多条公式。')
+      .addToggle(toggle => toggle.setValue(this.plugin.settings.penReadingMode).onChange(async value => {
+        this.plugin.settings.penReadingMode = value;
+        this.plugin.previews.resetMobilePreviews();
+        await this.plugin.saveSettings();
+      }));
     if (this.plugin.isMobile) new Setting(containerEl).setName('选中文字时显示引用工具').setDesc('选中后可点“转换引用”或“设为目标”；没有选区时隐藏。')
       .addToggle(toggle => toggle.setValue(this.plugin.settings.mobileSelectionActions).onChange(async value => { this.plugin.settings.mobileSelectionActions = value; await this.plugin.saveSettings(); }));
     if (!this.plugin.isMobile) new Setting(containerEl).setName('返回浮标位置')

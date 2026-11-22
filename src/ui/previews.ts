@@ -33,6 +33,8 @@ interface Preview {
   target?: NavigationTarget;
   heading: boolean;
   mobile: boolean;
+  pen: boolean;
+  mobilePosition?: { left: number; top: number };
   expanded: boolean;
   collapsed: boolean;
   active: boolean;
@@ -82,6 +84,11 @@ export class PreviewManager {
   }
   closeTransient(): void { this.openGeneration++; this.cancelOpen(); this.cancelClose(); if (this.transient) this.close(this.transient); }
 
+  resetMobilePreviews(): void {
+    this.openGeneration++; this.cancelOpen(); this.cancelClose();
+    for (const card of [...this.cards]) if (card.mobile) this.close(card);
+  }
+
   hideForNavigation(): void {
     if (this.transient?.mobile) this.minimize(this.transient);
     else this.closeTransient();
@@ -96,6 +103,7 @@ export class PreviewManager {
     else await this.host.referenceTargets(origin.path, ref.key);
     if (this.disposed || generation !== this.openGeneration || !element.isConnected) return;
     const mobile = this.host.isMobile;
+    const pen = mobile && this.host.settings.penReadingMode;
     if (mobile && this.transient?.key === ref.key && this.sameSource(this.transient, ref, origin)) {
       this.transient.origin = { ...origin };
       this.restore(this.transient);
@@ -105,7 +113,7 @@ export class PreviewManager {
     const anchor = element.getBoundingClientRect();
     this.closeTransient();
     const doc = element.ownerDocument;
-    const el = doc.body.createDiv({ cls: `reflo-preview${mobile ? ' reflo-mobile-preview' : ''}`, attr: { role: 'dialog' } });
+    const el = doc.body.createDiv({ cls: `reflo-preview${mobile ? ' reflo-mobile-preview' : ''}${pen ? ' reflo-pen-preview' : ''}`, attr: { role: 'dialog' } });
     el.style.width = `${this.host.settings.previewWidth}px`;
     el.style.zIndex = String(++this.z);
     const abort = new AbortController();
@@ -153,7 +161,7 @@ export class PreviewManager {
     card = { el, body, context, component, abort, path, heading: ref.kind === 'heading', key: ref.key, origin: { ...origin },
       targetFrom: -1, pinned: false,
       contextOpen: ref.kind !== 'heading' && this.host.settings.showContext, revision: 0, request: 0, contentSignature: '', nameEl, locationEl, pinButton, jumpButton,
-      formulaButton, formulaExpanded: false, mobile, expanded: false, collapsed: false, active: true };
+      formulaButton, formulaExpanded: false, mobile, pen, expanded: false, collapsed: false, active: true };
     updateContextButton();
     this.cards.add(card); this.transient = card;
     formulaButton.addEventListener('click', () => {
@@ -172,7 +180,8 @@ export class PreviewManager {
     el.addEventListener('keydown', event => {
       if (event.key === 'Escape') {
         event.stopPropagation();
-        if (mobile) this.minimize(card);
+        if (card.pen && card.pinned) this.close(card);
+        else if (mobile) this.minimize(card);
         else if (this.transient && this.transient !== card) this.closeTransient();
         else { this.close(card); element.focus(); }
       }
@@ -208,7 +217,8 @@ export class PreviewManager {
   }
 
   private minimize(card: Preview): void {
-    if (!card.mobile || !this.cards.has(card)) return;
+    // Pinned pen cards have an independent close button, never a hidden restore tab.
+    if (!card.mobile || card.pinned || !this.cards.has(card)) return;
     this.openGeneration++;
     this.cancelOpen(); this.cancelClose();
     card.collapsed = true;
@@ -227,11 +237,12 @@ export class PreviewManager {
   private positionMobile(card: Preview): void {
     const win = card.el.ownerDocument.defaultView!, viewport = win.visualViewport;
     const width = viewport?.width ?? win.innerWidth, height = viewport?.height ?? win.innerHeight;
-    const left = viewport?.offsetLeft ?? 0;
-    const bottom = Math.max(0, win.innerHeight - (viewport?.offsetTop ?? 0) - height) + 60;
-    card.el.style.left = `${left + 8}px`;
-    card.el.style.top = 'auto';
-    card.el.style.width = `${Math.max(0, width - 16)}px`;
+    const left = viewport?.offsetLeft ?? 0, top = viewport?.offsetTop ?? 0;
+    const bottom = Math.max(0, win.innerHeight - top - height) + 60;
+    const cardWidth = card.pen
+      ? Math.min(width - 16, width >= 700 ? Math.min(560, Math.max(320, width * .45)) : 460)
+      : width - 16;
+    card.el.style.width = `${Math.max(0, cardWidth)}px`;
     card.el.style.maxWidth = `${Math.max(0, width - 16)}px`;
     card.el.style.maxHeight = `${Math.max(80, Math.min(height * (card.expanded ? .9 : .62), height - 100))}px`;
     card.el.classList.toggle('is-expanded', card.expanded);
@@ -239,6 +250,19 @@ export class PreviewManager {
       element.style.setProperty('--reflo-mobile-bottom', `${bottom}px`);
     }
     if (card.restoreButton) card.restoreButton.style.left = `${left + 10}px`;
+    if (card.mobilePosition) {
+      card.el.style.bottom = 'auto';
+      const rect = card.el.getBoundingClientRect();
+      const position = card.mobilePosition;
+      position.left = clamp(position.left, left + 8, Math.max(left + 8, left + width - rect.width - 8));
+      position.top = clamp(position.top, top + 8, Math.max(top + 8, top + height - rect.height - 68));
+      card.el.style.left = `${position.left}px`;
+      card.el.style.top = `${position.top}px`;
+    } else {
+      card.el.style.left = `${left + (width - cardWidth) / 2}px`;
+      card.el.style.top = 'auto';
+      card.el.style.bottom = '';
+    }
   }
 
   private enableMobile(card: Preview, header: HTMLElement): void {
@@ -251,16 +275,26 @@ export class PreviewManager {
     });
     card.restoreButton.hidden = true;
     card.restoreButton.addEventListener('click', () => this.restore(card), { signal });
+    bindTouchButton(card.restoreButton, signal);
     doc.addEventListener('pointerdown', event => {
-      if (!card.active || card.collapsed || !(event.target instanceof Node)) return;
+      if (!card.active || card.collapsed || card.pinned || !(event.target instanceof Node)) return;
       if (card.el.contains(event.target) || card.restoreButton?.contains(event.target)) return;
-      if (event.target instanceof Element && event.target.closest('.reflo-reference')) return;
+      if (event.target instanceof Element && event.target.closest('.reflo-reference, .reflo-preview, .reflo-mobile-preview-tab')) return;
       this.minimize(card);
     }, { capture: true, signal });
     const resize = () => this.positionMobile(card);
     win.addEventListener('resize', resize, { signal });
     win.visualViewport?.addEventListener('resize', resize, { signal });
     win.visualViewport?.addEventListener('scroll', resize, { signal });
+    if (card.pen) {
+      this.enablePenDrag(card, header);
+      // Formula expansion and asynchronous image loading can change a dragged
+      // card's height. Keep all its controls within the visible viewport.
+      const observer = new win.ResizeObserver(() => { if (card.pinned && !card.collapsed) this.positionMobile(card); });
+      observer.observe(card.el);
+      signal.addEventListener('abort', () => observer.disconnect(), { once: true });
+      return;
+    }
     let gesture: { id: number; x: number; y: number } | undefined;
     header.addEventListener('pointerdown', event => {
       if (event.button !== 0 || (event.target as Element).closest('button')) return;
@@ -283,6 +317,51 @@ export class PreviewManager {
     }, { signal });
     header.addEventListener('pointercancel', () => { gesture = undefined; }, { signal });
     header.addEventListener('lostpointercapture', () => { gesture = undefined; }, { signal });
+  }
+
+  private enablePenDrag(card: Preview, header: HTMLElement): void {
+    const signal = card.abort.signal;
+    let gesture: { id: number; x: number; y: number; left: number; top: number; moved: boolean } | undefined;
+    const stop = () => {
+      if (!gesture) return;
+      const id = gesture.id;
+      gesture = undefined;
+      card.el.classList.remove('is-dragging');
+      if (header.hasPointerCapture(id)) header.releasePointerCapture(id);
+    };
+    header.addEventListener('pointerdown', event => {
+      if (gesture) { stop(); return; }
+      if (event.button !== 0 || (event.target as Element).closest('button')) return;
+      const rect = card.el.getBoundingClientRect();
+      gesture = { id: event.pointerId, x: event.clientX, y: event.clientY, left: rect.left, top: rect.top, moved: false };
+      event.preventDefault();
+      header.setPointerCapture(event.pointerId);
+    }, { signal });
+    const move = (event: PointerEvent) => {
+      if (!gesture || gesture.id !== event.pointerId) return;
+      const dx = event.clientX - gesture.x, dy = event.clientY - gesture.y;
+      if (!gesture.moved && Math.hypot(dx, dy) < 8) return;
+      event.preventDefault();
+      gesture.moved = true;
+      if (!card.pinned) {
+        card.pinned = true;
+        card.el.classList.add('is-pinned');
+        card.pinButton.remove();
+        card.restoreButton?.remove(); card.restoreButton = undefined;
+        if (this.transient === card) this.transient = undefined;
+        this.cancelOpen(); this.cancelClose();
+      }
+      card.el.classList.add('is-dragging');
+      card.mobilePosition = { left: gesture.left + dx, top: gesture.top + dy };
+      this.positionMobile(card);
+    };
+    header.addEventListener('pointermove', move, { signal });
+    header.addEventListener('pointerup', event => {
+      if (gesture?.id !== event.pointerId) return;
+      move(event); stop();
+    }, { signal });
+    header.addEventListener('pointercancel', stop, { signal });
+    header.addEventListener('lostpointercapture', stop, { signal });
   }
 
   private pin(card: Preview): void {
@@ -445,7 +524,9 @@ export class PreviewManager {
   setActivePath(path?: string): void {
     this.openGeneration++;
     for (const card of this.cards) {
-      card.active = card.origin.path === path || card.path === path;
+      // A dragged card is a temporary comparison surface across reading tabs.
+      // Its jump action still records the reader's current note and position.
+      card.active = (card.pen && card.pinned) || card.origin.path === path || card.path === path;
       if (card.mobile && !card.active) this.minimize(card);
       card.el.hidden = !card.active || card.collapsed;
       if (card.restoreButton) card.restoreButton.hidden = !card.active || !card.collapsed;

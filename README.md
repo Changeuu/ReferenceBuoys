@@ -10,7 +10,7 @@ Existing heading links such as `[[#Energy]]` and `[[Mechanics#Energy]]` also sup
 
 Built for **Live Preview**, with manual numbering and support for sublabels such as `1.13a` and `1.13b`.
 
-**Version 0.1.12 · Early release · Windows + Android (experimental) · Obsidian 1.8.0 or later**
+**Version 0.1.13 · Early release · Windows + Android (experimental) · Obsidian 1.8.0 or later**
 
 The plugin interface and bundled example notes currently use Simplified Chinese. This guide includes the Chinese names of commands and controls so you can find them.
 
@@ -220,7 +220,7 @@ Short citations such as `定义 1.1.4` and `定理 1.13a` still use **转换选�
 
 Use the same ZIP and reference syntax on Android. Copy the `reference-buoys` folder into the Android vault's `.obsidian/plugins/` directory, then enable it in **Settings → Community plugins**.
 
-| Touch action | Result |
+| Default touch controls | Result |
 | --- | --- |
 | Tap a reference | Open a single preview panel near the bottom of the screen |
 | Tap **跳转** (Jump) in the preview | Jump to the source, leave a return marker, and collapse the preview |
@@ -234,7 +234,11 @@ Use the same ZIP and reference syntax on Android. Copy the `reference-buoys` fol
 
 Return markers show only a direction and a sequence number, such as `↑ 1` or `↓ 2`. Markers above your current reading position sit at the top right; those below it sit at the bottom right. Multiple markers remain available in scrollable stacks, without text excerpts.
 
-Opening another reference replaces the current mobile preview. The panel adjusts to screen rotation and viewport changes. Jumping and returning do not explicitly focus the editor.
+In the default touch mode, opening another reference replaces the current mobile preview. The panel adjusts to screen rotation and viewport changes.
+
+**Tablet pen input.** Enable **手写笔阅读模式** (Pen reading mode) in the plugin settings. Tap an equation number with the pen tip to open a preview at the bottom and keep your reading position. Tap the reference with a finger to jump and leave a return marker. The same gestures work with other numbered references and supported heading links.
+
+To compare two formulas, drag the first preview by its **title bar** with the pen or your finger. Tap the next number with the pen. Its preview opens at the bottom while the first window stays where you placed it. An undragged bottom preview is replaced on the next pen tap. Swipe on the formula itself to read wide equations and use × to close each window individually. Pen reading mode requires the device to distinguish the pen tip from a finger. If both are reported as touch, turn the mode off to use tap-to-preview.
 
 When you select text in the editor, a small toolbar offers **转换引用** (Convert reference) and **设为目标** (Mark target). Conversion only runs when tapped. Marking a definition or theorem still opens a preview for confirmation. Each edit can be undone in one step, and conversion does not explicitly focus the editor. The toolbar disappears when there is no selection. Its × hides it for the current selection; disable **选中文字时显示引用工具** in plugin settings to turn it off entirely. Existing commands remain available in Obsidian's mobile toolbar.
 
@@ -385,7 +389,7 @@ Adjust whether context is expanded by default, autocomplete, and conversion temp
 
 The current release targets **Windows desktop and Android (experimental), especially Live Preview**. Numbered references resolve locally first and can fall back to Markdown notes directly in the same folder. Heading wikilinks can name notes elsewhere in the vault. Automatic numbering is not supported. iOS has not been tested.
 
-Automated tests cover parsing, context extraction, position tracking, heading section boundaries, cross-note return stacks, selected-reference conversion, template generation, definition/theorem target creation, formula overflow, multi-tag row highlighting, focused equation previews, CodeMirror widgets, and browser interactions. Earlier versions have been tried manually in Obsidian on Windows. The 0.1.12 changes and Android support still need testing in Obsidian. Browser component tests use a simplified Obsidian API stub with real CodeMirror and MathJax, so they do not replace app testing.
+Automated tests cover parsing, context extraction, position tracking, heading section boundaries, cross-note return stacks, selected-reference conversion, template generation, definition/theorem target creation, formula overflow, multi-tag row highlighting, focused equation previews, CodeMirror widgets, and browser interactions. Earlier versions have been tried manually in Obsidian on Windows. The 0.1.13 changes and Android support still need testing in Obsidian. Browser component tests use a simplified Obsidian API stub with real CodeMirror and MathJax, so they do not replace app testing.
 
 Suggested checks when trying the plugin:
 
@@ -399,6 +403,10 @@ Suggested checks when trying the plugin:
 To [report an issue](https://github.com/Changeuu/ReferenceBuoys/issues), include your Obsidian version, theme, a minimal example note, and the steps that trigger the problem. Use sample content that you are comfortable sharing.
 
 ## Changelog
+
+### 0.1.13
+
+- Added optional pen reading mode. Tap with the pen to preview, tap with a finger to jump, and drag previews aside to compare several formulas.
 
 ### 0.1.12
 
